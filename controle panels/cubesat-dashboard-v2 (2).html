@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CubeSat Telemetry Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#000;--bg2:#080808;--bg3:#0f0f0f;
+  --border:rgba(255,255,255,0.12);--border2:rgba(255,255,255,0.06);
+  --text:#ffffff;--dim:#888888;--dim2:#444444;
+  --mono:'Share Tech Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--mono);display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:11px;}
+
+/* TOP BAR */
+.topbar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.tb-left{display:flex;align-items:center;gap:16px;}
+.tb-title{font-size:12px;letter-spacing:4px;color:#fff;}
+.tb-sep{width:1px;height:12px;background:var(--border);}
+.tb-tag{font-size:8px;letter-spacing:2px;color:var(--dim);}
+.tb-right{display:flex;align-items:center;gap:12px;}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--dim2);transition:background .3s;}
+.live-dot.ok{background:#fff;box-shadow:0 0 4px #fff;animation:blink 1.8s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.2;}}
+.clock{font-size:10px;letter-spacing:2px;color:#fff;}
+
+/* LAYOUT */
+.body{display:flex;flex:1;overflow:hidden;min-height:0;}
+.column{width:50%;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);background:var(--bg);min-height:0;}
+.column:last-child{border-right:none;}
+
+/* PANEL HEADERS */
+.panel-header{padding:5px 12px;border-bottom:1px solid var(--border2);font-size:8px;letter-spacing:3px;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;background:var(--bg2);flex-shrink:0;}
+
+/* CAMERA */
+.cam-container{flex-shrink:0;background:#000;border-bottom:1px solid var(--border2);}
+.cam-header{display:flex;align-items:center;justify-content:space-between;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--bg2);}
+.cam-viewport{position:relative;width:100%;aspect-ratio:1/1;background:#020202;overflow:hidden;}
+.cam-viewport img{width:100%;height:100%;object-fit:cover;display:block;}
+.cam-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:#000;}
+.cam-footer{display:flex;justify-content:space-between;padding:3px 12px;border-top:1px solid var(--border2);background:var(--bg2);}
+/* corner brackets */
+.cam-viewport .c{position:absolute;width:12px;height:12px;border-color:rgba(255,255,255,0.2);border-style:solid;pointer-events:none;z-index:2;}
+.cam-viewport .c.tl{top:6px;left:6px;border-width:1px 0 0 1px;}
+.cam-viewport .c.tr{top:6px;right:6px;border-width:1px 1px 0 0;}
+.cam-viewport .c.bl{bottom:6px;left:6px;border-width:0 0 1px 1px;}
+.cam-viewport .c.br{bottom:6px;right:6px;border-width:0 1px 1px 0;}
+/* scanlines */
+.cam-scan{position:absolute;inset:0;pointer-events:none;z-index:1;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.08) 2px,rgba(0,0,0,0.08) 4px);}
+/* crosshair */
+.cam-cross{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;opacity:0.15;z-index:2;}
+#cam-live{display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:7px;color:rgba(255,255,255,0.5);letter-spacing:3px;z-index:3;}
+
+/* SNAP BAR */
+.snap-bar{display:flex;align-items:center;justify-content:space-between;padding:4px 12px;border-bottom:1px solid var(--border2);background:var(--bg2);flex-shrink:0;}
+.snap-btn{display:flex;align-items:center;gap:6px;background:transparent;border:1px solid rgba(255,255,255,0.25);color:#fff;padding:3px 10px;cursor:pointer;font-family:var(--mono);font-size:8px;letter-spacing:2px;transition:background .15s;}
+.snap-btn:hover{background:rgba(255,255,255,0.07);}
+.snap-btn:active{opacity:.7;}
+.snap-btn svg{width:11px;height:11px;fill:none;stroke:#fff;stroke-width:1.5;}
+.snap-info{font-size:7px;color:var(--dim2);letter-spacing:1px;}
+.snap-saved{font-size:7px;color:#fff;letter-spacing:1px;opacity:0;transition:opacity .3s;}
+.snap-saved.show{opacity:1;}
+.snap-flash{position:absolute;inset:0;background:rgba(255,255,255,.65);opacity:0;pointer-events:none;z-index:10;transition:opacity .1s;}
+.snap-flash.on{opacity:1;}
+
+/* ESP SENSOR SECTION */
+.esp-section{border-bottom:1px solid var(--border2);background:#020202;flex-shrink:0;}
+.esp-status{display:flex;align-items:center;gap:6px;padding:4px 12px;border-bottom:1px solid var(--border2);background:#060606;}
+.esp-dot{width:5px;height:5px;border-radius:50%;background:#222;transition:background .3s;}
+.esp-dot.ok{background:#fff;box-shadow:0 0 4px #fff;}
+.esp-dot.err{background:#555;}
+.esp-tag{font-size:8px;letter-spacing:2px;color:#fff;font-weight:bold;}
+.esp-ip{font-size:7px;color:var(--dim);letter-spacing:1px;margin-left:auto;}
+.sec-sub{padding:2px 12px;font-size:7px;letter-spacing:2px;color:rgba(255,255,255,0.25);border-bottom:1px solid var(--border2);}
+.esp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--border2);}
+.esp-grid.two{grid-template-columns:1fr 1fr;}
+.esp-cell{padding:5px 12px;border-right:1px solid var(--border2);display:flex;flex-direction:column;}
+.esp-cell:last-child{border-right:none;}
+.esp-lbl{font-size:7px;letter-spacing:2px;color:var(--dim2);}
+.esp-val{font-size:15px;color:#fff;line-height:1.1;letter-spacing:-.5px;}
+.esp-unit{font-size:7px;color:var(--dim);letter-spacing:1px;}
+
+/* SPARKLINE CHARTS */
+.spark-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.spark-cell{padding:4px 8px;border-right:1px solid var(--border2);display:flex;flex-direction:column;}
+.spark-cell:last-child{border-right:none;}
+.spark-lbl{font-size:7px;color:var(--dim2);letter-spacing:1px;margin-bottom:2px;}
+.spark-wrap{height:40px;position:relative;}
+
+/* ROWS (right column data) */
+.sec-label{font-size:7px;letter-spacing:3px;color:var(--dim2);text-transform:uppercase;padding:4px 12px 2px;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.data-row{display:flex;justify-content:space-between;align-items:center;padding:4px 12px;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.rk{font-size:9px;color:var(--dim);letter-spacing:1px;}
+.rv{font-size:11px;color:#fff;letter-spacing:1px;}
+.rv.dim{color:var(--dim);}
+.rv.warn{color:#aaa;}
+
+/* BIG VALUE DISPLAY */
+.big-grid{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border2);flex-shrink:0;}
+.big-cell{padding:8px 12px;border-right:1px solid var(--border2);}
+.big-cell:last-child{border-right:none;}
+.big-lbl{font-size:7px;letter-spacing:2px;color:var(--dim2);margin-bottom:3px;}
+.big-val{font-size:26px;color:#fff;line-height:1;font-weight:bold;letter-spacing:-1px;}
+.big-unit{font-size:8px;color:var(--dim);letter-spacing:1px;margin-top:2px;}
+
+/* FULL CHART BLOCK */
+.chart-block{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;padding:4px 12px;}
+.chart-lbl{font-size:7px;letter-spacing:2px;color:var(--dim2);margin-bottom:4px;flex-shrink:0;}
+.chart-wrap{flex:1;position:relative;min-height:0;}
+
+/* CONSOLE */
+.console-wrap{display:flex;flex-direction:column;min-height:0;flex:1;max-height:110px;background:#030303;border-top:1px solid var(--border2);}
+.console-body{flex:1;overflow-y:auto;padding:5px 12px;font-size:8px;color:var(--dim);line-height:1.4;white-space:pre-wrap;word-break:break-all;scrollbar-width:none;}
+.console-body::-webkit-scrollbar{display:none;}
+.log-w{color:#fff;}.log-d{color:var(--dim2);}.log-ok{color:#bbb;}
+
+/* STATUS BAR */
+.statusbar{height:18px;display:flex;align-items:center;justify-content:space-between;padding:0 16px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.sb-item{font-size:8px;letter-spacing:1px;color:var(--dim2);display:flex;align-items:center;gap:5px;}
+.sb-dot{width:4px;height:4px;border-radius:50%;background:#fff;}
+.sb-dot.off{background:var(--dim2);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-left">
+    <span class="tb-title">CUBESAT//OS</span>
+    <div class="tb-sep"></div>
+    <span class="tb-tag">MISSION ALPHA-7 · LEO 600KM</span>
+  </div>
+  <div class="tb-right">
+    <div class="live-dot" id="link-dot"></div>
+    <span class="tb-tag" id="link-status">LINK OFFLINE</span>
+    <div class="tb-sep"></div>
+    <span class="clock" id="clk">UTC 00:00:00</span>
+  </div>
+</div>
+
+<div class="body">
+
+  <!-- LEFT COLUMN: Camera + ESP Sensors + Console -->
+  <div class="column">
+    <div class="panel-header">OPTICS & POWER MATRIX <span id="hz">— Hz</span></div>
+
+    <!-- CAMERA -->
+    <div class="cam-container">
+      <div class="cam-header">
+        <span style="font-size:8px;letter-spacing:3px;color:#aaa;">OPTICAL SUITE · Pi Zero 2W</span>
+        <span id="cam-status" style="font-size:8px;letter-spacing:1px;color:#666;animation:blink 2s infinite;">● CONNECTING</span>
+      </div>
+      <div class="cam-viewport">
+        <div class="cam-scan"></div>
+        <div class="c tl"></div><div class="c tr"></div><div class="c bl"></div><div class="c br"></div>
+        <div class="cam-cross">
+          <svg width="36" height="36" viewBox="0 0 44 44"><line x1="22" y1="0" x2="22" y2="17" stroke="#fff" stroke-width="0.8"/><line x1="22" y1="27" x2="22" y2="44" stroke="#fff" stroke-width="0.8"/><line x1="0" y1="22" x2="17" y2="22" stroke="#fff" stroke-width="0.8"/><line x1="27" y1="22" x2="44" y2="22" stroke="#fff" stroke-width="0.8"/><circle cx="22" cy="22" r="7" stroke="#fff" stroke-width="0.8" fill="none"/></svg>
+        </div>
+        <img id="camFeed" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 0.5s;" alt=""/>
+        <div class="cam-overlay" id="cam-overlay">
+          <svg width="22" height="22" viewBox="0 0 32 32" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1"><rect x="4" y="8" width="24" height="18" rx="1"/><circle cx="16" cy="17" r="5"/><circle cx="16" cy="17" r="2"/><rect x="12" y="4" width="8" height="4"/></svg>
+          <span id="cam-msg" style="font-size:8px;color:#444;letter-spacing:3px;">NO SIGNAL</span>
+          <span style="font-size:7px;color:#2a2a2a;letter-spacing:2px;">192.168.137.53:5000</span>
+        </div>
+        <div id="cam-live">● REC</div>
+        <div class="snap-flash" id="snap-flash"></div>
+      </div>
+      <div class="cam-footer">
+        <span id="cam-endpoint" style="font-size:7px;color:var(--dim);letter-spacing:1px;">—</span>
+        <span id="cam-res" style="font-size:7px;color:var(--dim);letter-spacing:1px;">—</span>
+      </div>
+    </div>
+
+    <!-- SNAP BAR -->
+    <div class="snap-bar">
+      <button class="snap-btn" onclick="captureSnapshot()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"/></svg>
+        CAPTURE SNAPSHOT
+      </button>
+      <span class="snap-info">SAVES TO DOWNLOADS</span>
+      <span class="snap-saved" id="snap-saved">✓ SAVED</span>
+    </div>
+
+    <!-- ESP SENSORS -->
+    <div class="esp-section">
+      <div class="esp-status">
+        <div class="esp-dot" id="esp-dot"></div>
+        <span class="esp-tag">NODE LNK // ESP32-S3</span>
+        <span class="esp-ip">192.168.137.18</span>
+      </div>
+      <div class="sec-sub">POWER RAIL TELEMETRY // INA219</div>
+      <div class="esp-grid">
+        <div class="esp-cell">
+          <div class="esp-lbl">VOLTAGE</div>
+          <div class="esp-val" id="esp-volt">—</div>
+          <div class="esp-unit">V BUS</div>
+        </div>
+        <div class="esp-cell">
+          <div class="esp-lbl">CURRENT</div>
+          <div class="esp-val" id="esp-curr">—</div>
+          <div class="esp-unit">mA</div>
+        </div>
+        <div class="esp-cell">
+          <div class="esp-lbl">POWER</div>
+          <div class="esp-val" id="esp-pwr">—</div>
+          <div class="esp-unit">mW</div>
+        </div>
+      </div>
+      <div class="sec-sub">ATMOSPHERIC // BMP280</div>
+      <div class="esp-grid two">
+        <div class="esp-cell">
+          <div class="esp-lbl">CORE TEMP</div>
+          <div class="esp-val" id="esp-temp">—</div>
+          <div class="esp-unit">°C</div>
+        </div>
+        <div class="esp-cell">
+          <div class="esp-lbl">BARO PRES</div>
+          <div class="esp-val" id="esp-pres">—</div>
+          <div class="esp-unit">hPa</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SPARKLINES -->
+    <div class="spark-grid">
+      <div class="spark-cell">
+        <div class="spark-lbl">VOLTAGE WAVE</div>
+        <div class="spark-wrap"><canvas id="voltChart"></canvas></div>
+      </div>
+      <div class="spark-cell">
+        <div class="spark-lbl">TEMPERATURE</div>
+        <div class="spark-wrap"><canvas id="tempChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="console-wrap">
+      <div class="panel-header">SYSTEM TERMINAL</div>
+      <div class="console-body" id="con">
+        <div class="log-w">// CUBESAT_OS INITIALIZED</div>
+        <div class="log-d">[OK] ESP32-S3 I2C profile active</div>
+        <div class="log-d">[OK] INA219 power monitor armed</div>
+        <div class="log-d">[OK] BMP280 atmospheric sensor ready</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN: Detailed sensor data + history charts -->
+  <div class="column">
+    <div class="panel-header">TELEMETRY DETAIL VIEW</div>
+
+    <!-- BIG READOUTS -->
+    <div class="big-grid">
+      <div class="big-cell">
+        <div class="big-lbl">BUS VOLTAGE</div>
+        <div class="big-val" id="r-volt">—</div>
+        <div class="big-unit">VOLTS</div>
+      </div>
+      <div class="big-cell">
+        <div class="big-lbl">DRAW CURRENT</div>
+        <div class="big-val" id="r-curr">—</div>
+        <div class="big-unit">MILLIAMPS</div>
+      </div>
+    </div>
+    <div class="big-grid">
+      <div class="big-cell">
+        <div class="big-lbl">POWER COMP</div>
+        <div class="big-val" id="r-pwr">—</div>
+        <div class="big-unit">MILLIWATTS</div>
+      </div>
+      <div class="big-cell">
+        <div class="big-lbl">AMBIENT TEMP</div>
+        <div class="big-val" id="r-temp">—</div>
+        <div class="big-unit">CELSIUS</div>
+      </div>
+    </div>
+
+    <!-- BARO PRESSURE FULL WIDTH -->
+    <div style="padding:6px 12px;border-bottom:1px solid var(--border2);flex-shrink:0;">
+      <div style="font-size:7px;letter-spacing:2px;color:var(--dim2);margin-bottom:2px;">BAROMETRIC PRESSURE</div>
+      <div style="display:flex;align-items:baseline;gap:8px;">
+        <span style="font-size:32px;color:#fff;font-weight:bold;letter-spacing:-1px;" id="r-pres">—</span>
+        <span style="font-size:9px;color:var(--dim);">hPa</span>
+      </div>
+    </div>
+
+    <!-- STATUS ROWS -->
+    <div class="sec-label">NODE STATUS</div>
+    <div class="data-row"><span class="rk">ESP32 LINK</span><span class="rv" id="st-link">OFFLINE</span></div>
+    <div class="data-row"><span class="rk">PACKETS RECV</span><span class="rv" id="st-pkts">0</span></div>
+    <div class="data-row"><span class="rk">POLL RATE</span><span class="rv">2000 ms</span></div>
+    <div class="data-row"><span class="rk">UPTIME</span><span class="rv" id="st-up">00:00:00</span></div>
+    <div class="data-row"><span class="rk">CAMERA NODE</span><span class="rv dim" id="st-cam">OFFLINE</span></div>
+    <div class="data-row"><span class="rk">BUFFER</span><span class="rv">40 PTS</span></div>
+
+    <!-- CURRENT CHART -->
+    <div class="sec-label">CURRENT DRAWN PROFILE</div>
+    <div class="chart-block">
+      <div class="chart-wrap"><canvas id="currChart"></canvas></div>
+    </div>
+
+    <!-- POWER CHART -->
+    <div class="sec-label">POWER CONSUMPTION PROFILE</div>
+    <div class="chart-block">
+      <div class="chart-wrap"><canvas id="pwrChart"></canvas></div>
+    </div>
+
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="sb-item"><div class="sb-dot" id="sb-esp"></div>ESP32-S3</div>
+  <div class="sb-item"><div class="sb-dot off" id="sb-cam"></div>PI CAM</div>
+  <div class="sb-item"><div class="sb-dot"></div>INA219</div>
+  <div class="sb-item"><div class="sb-dot"></div>BMP280</div>
+  <div class="sb-item">STATUS <span id="sb-status" style="color:var(--dim2);margin-left:4px;">DISCONNECTED</span></div>
+  <div class="sb-item" style="color:var(--dim2)">v4.1.2 // ALPHA-7</div>
+</div>
+
+<script>
+// CLOCK
+function tick(){
+  const n=new Date(),p=v=>String(v).padStart(2,'0');
+  document.getElementById('clk').textContent=`UTC ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
+}
+setInterval(tick,1000);tick();
+
+// UPTIME
+let up=0;
+setInterval(()=>{
+  up++;const p=v=>String(v).padStart(2,'0');
+  document.getElementById('st-up').textContent=`${p(Math.floor(up/3600))}:${p(Math.floor(up%3600/60))}:${p(up%60)}`;
+},1000);
+
+// CHARTS
+const N=40;
+function makeChart(id,color){
+  return new Chart(document.getElementById(id).getContext('2d'),{
+    type:'line',
+    data:{labels:Array(N).fill(''),datasets:[{data:Array(N).fill(null),borderColor:color,borderWidth:1.1,fill:false,tension:0.4,pointRadius:0}]},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}}}
+  });
+}
+const voltCh = makeChart('voltChart','#ffffff');
+const tempCh = makeChart('tempChart','#aaaaaa');
+const currCh = makeChart('currChart','#cccccc');
+const pwrCh  = makeChart('pwrChart', '#666666');
+
+function push(chart,val){
+  const d=chart.data.datasets[0].data;
+  d.push(val);if(d.length>N)d.shift();
+  chart.update('none');
+}
+
+// LOG
+function log(txt,cls='log-d'){
+  const el=document.getElementById('con');
+  const d=document.createElement('div');d.className=cls;d.textContent=txt;
+  el.appendChild(d);while(el.children.length>40)el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+
+// CAMERA
+const CAM_BASE='http://192.168.137.53:5000';
+const ENDPOINTS=['/stream.mjpg','/video_feed','/stream','/video','/cam','/mjpeg','/'];
+let camIdx=0;
+function setCamStatus(txt,color){const el=document.getElementById('cam-status');if(el){el.textContent=txt;el.style.color=color;}}
+function tryEndpoint(idx){
+  if(idx>=ENDPOINTS.length){
+    setCamStatus('● OFFLINE','#555');
+    document.getElementById('cam-msg').textContent='NO SIGNAL — RETRYING...';
+    document.getElementById('st-cam').textContent='OFFLINE';
+    setTimeout(()=>{camIdx=0;tryEndpoint(0);},6000);return;
+  }
+  const url=CAM_BASE+ENDPOINTS[idx];
+  const img=document.getElementById('camFeed');
+  document.getElementById('cam-msg').textContent='TRYING '+ENDPOINTS[idx]+'...';
+  img.onload=()=>{
+    img.style.opacity='1';
+    document.getElementById('cam-overlay').style.display='none';
+    document.getElementById('cam-live').style.display='block';
+    setCamStatus('● LIVE','#ccc');
+    document.getElementById('cam-endpoint').textContent=ENDPOINTS[idx];
+    document.getElementById('cam-res').textContent='MJPEG FEED';
+    document.getElementById('st-cam').textContent='LIVE';
+    document.getElementById('st-cam').className='rv';
+    document.getElementById('sb-cam').className='sb-dot';
+    log('[CAM] Feed connected: '+url,'log-ok');
+  };
+  img.onerror=()=>{img.style.opacity='0';camIdx++;setTimeout(()=>tryEndpoint(camIdx),700);};
+  img.src=url;
+}
+tryEndpoint(0);
+
+// SNAPSHOT
+function captureSnapshot(){
+  const flash=document.getElementById('snap-flash');
+  const saved=document.getElementById('snap-saved');
+  const img=document.getElementById('camFeed');
+  flash.classList.add('on');
+  setTimeout(()=>flash.classList.remove('on'),180);
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=640;canvas.height=640;
+    const ctx=canvas.getContext('2d');
+    if(img&&img.complete&&img.naturalWidth>0&&parseFloat(img.style.opacity)>0){
+      ctx.drawImage(img,0,0,640,640);
+    } else {
+      ctx.fillStyle='#000';ctx.fillRect(0,0,640,640);
+      ctx.fillStyle='#333';ctx.font='11px monospace';
+      ctx.fillText('[ NO FEED ]',270,310);
+    }
+    ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,600,640,40);
+    ctx.fillStyle='#fff';ctx.font='9px monospace';
+    const v=document.getElementById('r-volt').textContent;
+    const c=document.getElementById('r-curr').textContent;
+    const t=document.getElementById('r-temp').textContent;
+    const p=document.getElementById('r-pres').textContent;
+    ctx.fillText(`CUBESAT-01  V:${v}V  I:${c}mA  T:${t}°C  P:${p}hPa  ${new Date().toISOString()}`,8,622);
+    const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,-5);
+    const a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download=`cubesat_snap_${ts}.png`;a.click();
+    saved.classList.add('show');
+    setTimeout(()=>saved.classList.remove('show'),2500);
+    log(`[SNAP] Saved: cubesat_snap_${ts}.png`,'log-ok');
+  }catch(e){
+    log('[SNAP] Failed — CORS restriction','log-d');
+  }
+}
+
+// ESP32 POLL
+const ESP_URL='http://192.168.137.18/';
+let packets=0,startTime=Date.now();
+function parseESP(text){
+  try{
+    const j=JSON.parse(text);
+    return{volt:j.voltage??j.volt??null,curr:j.current??j.curr??null,pwr:j.power??j.pwr??null,temp:j.temperature??j.temp??null,pres:j.pressure??j.pres??null};
+  }catch(_){return{volt:null,curr:null,pwr:null,temp:null,pres:null};}
+}
+async function pollESP(){
+  try{
+    const res=await fetch(ESP_URL,{cache:'no-store',signal:AbortSignal.timeout(2000)});
+    const text=await res.text();
+    const d=parseESP(text);
+    packets++;
+    const elapsed=(Date.now()-startTime)/1000;
+    document.getElementById('hz').textContent=(packets/elapsed).toFixed(2)+' Hz';
+    document.getElementById('st-pkts').textContent=packets;
+
+    document.getElementById('link-dot').className='live-dot ok';
+    document.getElementById('link-status').textContent='LINK ACTIVE';
+    document.getElementById('esp-dot').className='esp-dot ok';
+    document.getElementById('st-link').textContent='ACTIVE';
+    document.getElementById('sb-status').textContent='CONNECTED';
+    document.getElementById('sb-status').style.color='#fff';
+
+    const fmt=(v,n=2)=>v!==null?v.toFixed(n):'—';
+    // left column
+    document.getElementById('esp-volt').textContent=fmt(d.volt);
+    document.getElementById('esp-curr').textContent=fmt(d.curr,1);
+    document.getElementById('esp-pwr').textContent=fmt(d.pwr,1);
+    document.getElementById('esp-temp').textContent=fmt(d.temp,1);
+    document.getElementById('esp-pres').textContent=fmt(d.pres,1);
+    // right column big display
+    document.getElementById('r-volt').textContent=fmt(d.volt);
+    document.getElementById('r-curr').textContent=fmt(d.curr,1);
+    document.getElementById('r-pwr').textContent=fmt(d.pwr,1);
+    document.getElementById('r-temp').textContent=fmt(d.temp,1);
+    document.getElementById('r-pres').textContent=fmt(d.pres,1);
+
+    if(d.volt!==null)push(voltCh,d.volt);
+    if(d.temp!==null)push(tempCh,d.temp);
+    if(d.curr!==null)push(currCh,d.curr);
+    if(d.pwr!==null)push(pwrCh,d.pwr);
+
+    log(`[OK] Pkt#${packets} V:${fmt(d.volt)}V I:${fmt(d.curr,1)}mA P:${fmt(d.pwr,1)}mW T:${fmt(d.temp,1)}°C`,'log-ok');
+  }catch(e){
+    document.getElementById('link-dot').className='live-dot';
+    document.getElementById('link-status').textContent='LINK OFFLINE';
+    document.getElementById('esp-dot').className='esp-dot err';
+    document.getElementById('st-link').textContent='OFFLINE';
+    document.getElementById('sb-status').textContent='DISCONNECTED';
+    document.getElementById('sb-status').style.color='var(--dim2)';
+    log('[ERR] ESP32 unreachable — retrying...','log-d');
+  }
+}
+pollESP();setInterval(pollESP,2000);
+</script>
+</body>
+</html>
