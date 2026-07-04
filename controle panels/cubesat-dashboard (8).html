@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CubeSat Mission Control</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#040609;
+  --bg1:#070b10;
+  --bg2:#0a0f16;
+  --bg3:#0e1520;
+  --border:rgba(0,180,255,0.1);
+  --border2:rgba(0,180,255,0.06);
+  --border3:rgba(0,180,255,0.18);
+  --text:#e8f4ff;
+  --dim:#4a7a9b;
+  --dim2:#1e3a52;
+  --accent:#00b4ff;
+  --accent2:#0066aa;
+  --mono:'Space Mono',monospace;
+  --sans:'Inter',sans-serif;
+  --volt:#ff6b35;
+  --curr:#00e5ff;
+  --pwr:#a855f7;
+  --temp:#fbbf24;
+  --pres:#34d399;
+  --cam:#f43f5e;
+  --green:#00ff88;
+  --red:#ff3b5c;
+}
+
+body{
+  background:var(--bg);color:var(--text);font-family:var(--mono);
+  display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:11px;
+}
+
+/* TOPBAR */
+.topbar{
+  height:36px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;border-bottom:1px solid var(--border3);background:var(--bg1);
+  flex-shrink:0;position:relative;
+}
+.topbar::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent),transparent);
+  opacity:0.4;
+}
+.tb-left{display:flex;align-items:center;gap:14px;}
+.tb-logo{display:flex;align-items:center;gap:8px;}
+.logo-hex{width:18px;height:18px;fill:none;stroke:var(--accent);stroke-width:1.5;}
+.tb-title{font-size:11px;letter-spacing:4px;color:var(--accent);font-weight:700;}
+.tb-sep{width:1px;height:14px;background:var(--border3);}
+.tb-tag{font-size:7px;letter-spacing:2px;color:var(--dim);font-family:var(--sans);}
+.tb-badge{
+  background:rgba(0,180,255,0.08);border:1px solid rgba(0,180,255,0.2);
+  color:var(--accent);font-size:7px;letter-spacing:1px;padding:2px 6px;
+  border-radius:2px;font-family:var(--sans);
+}
+.tb-right{display:flex;align-items:center;gap:12px;}
+.live-indicator{display:flex;align-items:center;gap:5px;}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--dim2);transition:background 0.3s;}
+.live-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.5;transform:scale(0.8);}}
+.live-text{font-size:8px;letter-spacing:2px;color:var(--dim);}
+.clock{font-size:10px;letter-spacing:1px;color:var(--text);font-family:var(--mono);}
+
+/* MAIN LAYOUT */
+.layout{
+  flex:1;display:grid;
+  grid-template-columns:1fr 320px;
+  grid-template-rows:1fr;
+  min-height:0;gap:0;overflow:hidden;
+}
+
+/* LEFT COLUMN */
+.left-col{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border);}
+
+/* CAMERA */
+.cam-panel{flex-shrink:0;background:var(--bg1);border-bottom:1px solid var(--border);}
+.panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:5px 10px;border-bottom:1px solid var(--border2);background:var(--bg2);
+}
+.ph-left{display:flex;align-items:center;gap:8px;}
+.ph-dot{width:5px;height:5px;border-radius:50%;}
+.ph-label{font-size:7px;letter-spacing:2px;color:var(--dim);text-transform:uppercase;}
+.ph-val{font-size:7px;letter-spacing:1px;color:var(--dim);}
+.cam-viewport{
+  width:100%;height:178px;background:#000;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden;
+}
+.cam-viewport img{width:100%;height:100%;object-fit:contain;}
+.cam-grid{
+  position:absolute;inset:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,180,255,0.04) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,180,255,0.04) 1px,transparent 1px);
+  background-size:40px 40px;
+}
+.cam-cross{position:absolute;pointer-events:none;}
+.cam-cross::before{content:'';position:absolute;top:50%;left:-10px;right:-10px;height:1px;background:rgba(0,180,255,0.15);transform:translateY(-50%);}
+.cam-cross::after{content:'';position:absolute;left:50%;top:-10px;bottom:-10px;width:1px;background:rgba(0,180,255,0.15);transform:translateX(-50%);}
+.corner{position:absolute;width:12px;height:12px;border-color:var(--accent);border-style:solid;opacity:0.4;}
+.corner.tl{top:8px;left:8px;border-width:1px 0 0 1px;}
+.corner.tr{top:8px;right:8px;border-width:1px 1px 0 0;}
+.corner.bl{bottom:8px;left:8px;border-width:0 0 1px 1px;}
+.corner.br{bottom:8px;right:8px;border-width:0 1px 1px 0;}
+.cam-watermark{position:absolute;bottom:6px;left:8px;font-size:7px;color:var(--cam);letter-spacing:1px;display:flex;align-items:center;gap:4px;}
+.rec-dot{width:4px;height:4px;border-radius:50%;background:var(--cam);animation:pulse 1s infinite;}
+.cam-snap-overlay{position:absolute;inset:0;background:rgba(255,255,255,0.6);opacity:0;pointer-events:none;transition:opacity 0.15s;}
+.cam-snap-overlay.flash{opacity:1;}
+
+/* SNAP BAR */
+.snap-bar{
+  padding:6px 10px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border2);background:var(--bg2);flex-shrink:0;
+}
+.snap-btn{
+  display:flex;align-items:center;gap:6px;background:rgba(244,63,94,0.12);
+  border:1px solid rgba(244,63,94,0.35);color:#f43f5e;padding:4px 12px;
+  cursor:pointer;font-family:var(--mono);font-size:8px;letter-spacing:2px;
+  text-transform:uppercase;border-radius:2px;transition:background 0.2s,transform 0.1s;
+  flex-shrink:0;
+}
+.snap-btn:hover{background:rgba(244,63,94,0.22);}
+.snap-btn:active{transform:scale(0.97);}
+.snap-btn svg{width:12px;height:12px;fill:none;stroke:#f43f5e;stroke-width:1.5;}
+.snap-info{font-size:7px;color:var(--dim);letter-spacing:1px;}
+.snap-saved{font-size:7px;color:var(--green);letter-spacing:1px;opacity:0;transition:opacity 0.3s;}
+.snap-saved.show{opacity:1;}
+
+/* TELEMETRY SECTION */
+.telem-section{flex:1;display:flex;flex-direction:column;min-height:0;}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--border2);}
+.metric-cell{
+  padding:7px 10px;border-right:1px solid var(--border2);
+  display:flex;flex-direction:column;justify-content:center;position:relative;
+}
+.metric-cell:last-child{border-right:none;}
+.metric-cell::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:0;}
+.metric-cell.volt::before{background:var(--volt);}
+.metric-cell.curr::before{background:var(--curr);}
+.metric-cell.pwr::before{background:var(--pwr);}
+.metric-cell.temp::before{background:var(--temp);}
+.metric-cell.pres::before{background:var(--pres);}
+.m-lbl{font-size:6.5px;letter-spacing:2px;color:var(--dim);margin-bottom:3px;font-family:var(--sans);}
+.m-val{font-size:20px;color:var(--text);line-height:1;font-weight:700;letter-spacing:-1px;}
+.m-unit{font-size:7px;color:var(--dim);margin-top:2px;font-family:var(--sans);}
+.m-row{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--border2);}
+
+/* SPARKLINES */
+.spark-grid{display:grid;grid-template-columns:1fr 1fr 1fr;flex:1;min-height:0;background:var(--bg);}
+.spark-cell{padding:5px 8px;border-right:1px solid var(--border2);display:flex;flex-direction:column;min-height:0;}
+.spark-cell:last-child{border-right:none;}
+.spark-label{font-size:6.5px;color:var(--dim);margin-bottom:3px;letter-spacing:1px;font-family:var(--sans);}
+.spark-wrap{flex:1;position:relative;min-height:40px;}
+
+/* RIGHT COLUMN */
+.right-col{display:flex;flex-direction:column;min-height:0;background:var(--bg1);}
+
+/* ORBITAL INFO */
+.orbital-block{flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border2);}
+.orb-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;}
+.orb-cell{background:var(--bg2);border:1px solid var(--border2);padding:5px 8px;border-radius:2px;}
+.orb-lbl{font-size:6.5px;letter-spacing:1px;color:var(--dim);margin-bottom:2px;font-family:var(--sans);}
+.orb-val{font-size:13px;color:var(--text);font-weight:700;}
+.orb-unit{font-size:6.5px;color:var(--dim);font-family:var(--sans);}
+
+/* SYSTEM STATUS */
+.sys-block{flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border2);}
+.sys-row{display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border2);}
+.sys-row:last-child{border-bottom:none;}
+.sys-name{font-size:8px;letter-spacing:1px;color:var(--dim);font-family:var(--sans);}
+.sys-badge{
+  font-size:7px;letter-spacing:1px;padding:1px 5px;border-radius:2px;
+  font-family:var(--sans);
+}
+.badge-ok{background:rgba(0,255,136,0.1);color:var(--green);border:1px solid rgba(0,255,136,0.25);}
+.badge-err{background:rgba(255,59,92,0.1);color:var(--red);border:1px solid rgba(255,59,92,0.25);}
+.badge-warn{background:rgba(251,191,36,0.1);color:var(--temp);border:1px solid rgba(251,191,36,0.25);}
+
+/* POWER GAUGE */
+.gauge-block{flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--border2);}
+.gauge-wrap{margin-top:6px;position:relative;height:12px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.gauge-fill{height:100%;border-radius:2px;transition:width 0.5s ease;background:linear-gradient(90deg,var(--accent2),var(--accent));}
+.gauge-val{position:absolute;right:5px;top:50%;transform:translateY(-50%);font-size:7px;color:var(--text);}
+
+/* CONSOLE */
+.console-block{flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;}
+.console-body{
+  flex:1;overflow-y:auto;padding:6px 10px;font-size:7.5px;
+  color:var(--dim);line-height:1.5;white-space:pre-wrap;word-break:break-all;
+  font-family:var(--mono);scrollbar-width:none;
+}
+.console-body::-webkit-scrollbar{display:none;}
+.log-ok{color:var(--green);}
+.log-w{color:var(--text);}
+.log-err{color:var(--red);}
+.log-dim{color:var(--dim2);}
+.log-snap{color:#f43f5e;}
+
+/* STATUSBAR */
+.statusbar{
+  height:20px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 12px;border-top:1px solid var(--border3);background:var(--bg1);
+  flex-shrink:0;
+}
+.sb-item{font-size:7px;letter-spacing:1px;color:var(--dim2);display:flex;align-items:center;gap:4px;font-family:var(--sans);}
+.sb-accent{color:var(--accent);}
+.sb-ok{color:var(--green);}
+.sb-err{color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-left">
+    <div class="tb-logo">
+      <svg class="logo-hex" viewBox="0 0 24 24">
+        <polygon points="12,2 21,7 21,17 12,22 3,17 3,7"/>
+        <line x1="12" y1="2" x2="12" y2="22"/>
+        <line x1="3" y1="7" x2="21" y2="17"/>
+        <line x1="21" y1="7" x2="3" y2="17"/>
+      </svg>
+      <span class="tb-title">CUBESAT-01</span>
+    </div>
+    <div class="tb-sep"></div>
+    <span class="tb-tag">MISSION CONTROL SYSTEM</span>
+    <div class="tb-sep"></div>
+    <span class="tb-badge">ESP32-S3 NODE</span>
+    <span class="tb-badge">PI CAM LIVE</span>
+  </div>
+  <div class="tb-right">
+    <div class="live-indicator">
+      <div class="live-dot" id="link-dot"></div>
+      <span class="live-text" id="link-status">OFFLINE</span>
+    </div>
+    <div class="tb-sep"></div>
+    <span class="clock" id="clk">UTC 00:00:00</span>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- LEFT COLUMN -->
+  <div class="left-col">
+
+    <!-- Camera Feed -->
+    <div class="cam-panel">
+      <div class="panel-header">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--cam);"></div>
+          <span class="ph-label">Optical Imaging Suite</span>
+          <span class="ph-val">192.168.137.53:5000</span>
+        </div>
+        <span class="ph-val" id="frame-rate">— fps</span>
+      </div>
+      <div class="cam-viewport" id="cam-vp">
+        <div class="cam-grid"></div>
+        <div class="cam-cross"></div>
+        <div class="corner tl"></div><div class="corner tr"></div>
+        <div class="corner bl"></div><div class="corner br"></div>
+        <img id="cam-img" src="http://192.168.137.53:5000/stream.mjpg" alt="Awaiting feed..." onerror="handleCamErr()">
+        <div class="cam-snap-overlay" id="snap-flash"></div>
+        <div class="cam-watermark">
+          <div class="rec-dot"></div>
+          LIVE · PI_CAM_53
+        </div>
+      </div>
+    </div>
+
+    <!-- Snap Bar -->
+    <div class="snap-bar">
+      <button class="snap-btn" onclick="captureSnapshot()" id="snap-btn">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z"/></svg>
+        Capture Snapshot
+      </button>
+      <span class="snap-info">Saves to Downloads as PNG</span>
+      <span class="snap-saved" id="snap-saved">✓ Saved</span>
+    </div>
+
+    <!-- Telemetry Metrics -->
+    <div class="telem-section">
+      <div class="panel-header">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--accent);"></div>
+          <span class="ph-label">Hardware Data Acquisition</span>
+        </div>
+        <span class="ph-val" id="hz-indicator">0.00 Hz</span>
+      </div>
+
+      <div class="metric-grid">
+        <div class="metric-cell volt">
+          <div class="m-lbl">VOLTAGE</div>
+          <div class="m-val" id="val-volt">—</div>
+          <div class="m-unit">V BUS</div>
+        </div>
+        <div class="metric-cell curr">
+          <div class="m-lbl">CURRENT</div>
+          <div class="m-val" id="val-curr">—</div>
+          <div class="m-unit">mA DRAW</div>
+        </div>
+        <div class="metric-cell pwr">
+          <div class="m-lbl">POWER</div>
+          <div class="m-val" id="val-pwr">—</div>
+          <div class="m-unit">mW COMP</div>
+        </div>
+      </div>
+
+      <div class="m-row">
+        <div class="metric-cell temp" style="border-right:1px solid var(--border2);">
+          <div class="m-lbl">AMBIENT TEMP</div>
+          <div class="m-val" id="val-temp">—</div>
+          <div class="m-unit">°C</div>
+        </div>
+        <div class="metric-cell pres">
+          <div class="m-lbl">BARO PRESSURE</div>
+          <div class="m-val" id="val-pres">—</div>
+          <div class="m-unit">hPa</div>
+        </div>
+      </div>
+
+      <div class="spark-grid">
+        <div class="spark-cell">
+          <div class="spark-label">VOLTAGE PROFILE</div>
+          <div class="spark-wrap"><canvas id="sparkVolt"></canvas></div>
+        </div>
+        <div class="spark-cell">
+          <div class="spark-label">CURRENT PROFILE</div>
+          <div class="spark-wrap"><canvas id="sparkCurr"></canvas></div>
+        </div>
+        <div class="spark-cell">
+          <div class="spark-label">TEMP SPECTRUM</div>
+          <div class="spark-wrap"><canvas id="sparkTemp"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="right-col">
+    <!-- Orbital Block -->
+    <div class="orbital-block">
+      <div class="panel-header" style="padding:0 0 5px 0;border-bottom:1px solid var(--border2);margin-bottom:0;">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--pres);"></div>
+          <span class="ph-label">Orbital Parameters</span>
+        </div>
+      </div>
+      <div class="orb-grid">
+        <div class="orb-cell">
+          <div class="orb-lbl">ALTITUDE</div>
+          <div class="orb-val">400 <span class="orb-unit">km LEO</span></div>
+        </div>
+        <div class="orb-cell">
+          <div class="orb-lbl">INCLINATION</div>
+          <div class="orb-val">51.6 <span class="orb-unit">deg</span></div>
+        </div>
+        <div class="orb-cell">
+          <div class="orb-lbl">ORBIT PERIOD</div>
+          <div class="orb-val">92.4 <span class="orb-unit">min</span></div>
+        </div>
+        <div class="orb-cell">
+          <div class="orb-lbl">VELOCITY</div>
+          <div class="orb-val">7.66 <span class="orb-unit">km/s</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="sys-block">
+      <div class="panel-header" style="padding:0 0 5px 0;border-bottom:1px solid var(--border2);margin-bottom:6px;">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--temp);"></div>
+          <span class="ph-label">Subsystem Status</span>
+        </div>
+      </div>
+      <div class="sys-row">
+        <span class="sys-name">INA219 Power Monitor</span>
+        <span class="sys-badge badge-ok" id="sts-ina">NOMINAL</span>
+      </div>
+      <div class="sys-row">
+        <span class="sys-name">BMP280 Env Sensor</span>
+        <span class="sys-badge badge-ok" id="sts-bmp">NOMINAL</span>
+      </div>
+      <div class="sys-row">
+        <span class="sys-name">Pi Camera Module</span>
+        <span class="sys-badge badge-warn" id="sts-cam">STANDBY</span>
+      </div>
+      <div class="sys-row">
+        <span class="sys-name">WiFi Link (ESP32)</span>
+        <span class="sys-badge badge-err" id="sts-wifi">OFFLINE</span>
+      </div>
+      <div class="sys-row">
+        <span class="sys-name">Data Logger</span>
+        <span class="sys-badge badge-ok">ARMED</span>
+      </div>
+    </div>
+
+    <!-- Power Budget -->
+    <div class="gauge-block">
+      <div class="panel-header" style="padding:0 0 5px 0;border-bottom:1px solid var(--border2);margin-bottom:0;">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--pwr);"></div>
+          <span class="ph-label">Power Budget</span>
+        </div>
+        <span class="ph-val" id="pwr-pct">—%</span>
+      </div>
+      <div class="gauge-wrap" style="margin-top:8px;">
+        <div class="gauge-fill" id="gauge-fill" style="width:0%;"></div>
+        <span class="gauge-val" id="gauge-val">—</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:4px;">
+        <span style="font-size:6.5px;color:var(--dim);font-family:var(--sans);">0 mW</span>
+        <span style="font-size:6.5px;color:var(--dim);font-family:var(--sans);">5000 mW MAX</span>
+      </div>
+    </div>
+
+    <!-- Packet Counter -->
+    <div style="padding:6px 12px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <span style="font-size:7px;letter-spacing:1px;color:var(--dim);font-family:var(--sans);">PACKETS RECV</span>
+      <span style="font-size:16px;color:var(--accent);font-weight:700;" id="pkt-count">0</span>
+    </div>
+    <div style="padding:4px 12px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+      <span style="font-size:7px;letter-spacing:1px;color:var(--dim);font-family:var(--sans);">UPTIME</span>
+      <span style="font-size:10px;color:var(--text);font-weight:700;" id="uptime-val">00:00:00</span>
+    </div>
+
+    <!-- Console -->
+    <div class="console-block">
+      <div class="panel-header" style="flex-shrink:0;">
+        <div class="ph-left">
+          <div class="ph-dot" style="background:var(--dim2);"></div>
+          <span class="ph-label">Diagnostics Console</span>
+        </div>
+      </div>
+      <div class="console-body" id="console-output">
+        <div class="log-dim">// MISSION CONTROL INITIALIZED</div>
+        <div class="log-dim">// AWAITING ESP32-S3 TELEMETRY...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="sb-item">NODE <span class="sb-accent">192.168.137.18</span></div>
+  <div class="sb-item">CAM <span class="sb-accent">192.168.137.53:5000</span></div>
+  <div class="sb-item">POLL <span class="sb-accent">1500ms</span></div>
+  <div class="sb-item">STATUS <span id="status-txt" class="sb-err">DISCONNECTED</span></div>
+  <div class="sb-item">BUF <span class="sb-accent">40pts</span></div>
+</div>
+
+<script>
+// Clock
+function updateClock(){
+  const n=new Date(),p=v=>String(v).padStart(2,'0');
+  document.getElementById('clk').textContent=`UTC ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
+}
+setInterval(updateClock,1000);updateClock();
+
+// Uptime
+const bootTime = Date.now();
+function updateUptime(){
+  const s = Math.floor((Date.now()-bootTime)/1000);
+  const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+  const p = v=>String(v).padStart(2,'0');
+  document.getElementById('uptime-val').textContent = `${p(h)}:${p(m)}:${p(sec)}`;
+}
+setInterval(updateUptime,1000);
+
+// Sparklines
+const MAX_PTS = 40;
+function buildSpark(id, color) {
+  return new Chart(document.getElementById(id).getContext('2d'), {
+    type:'line',
+    data:{
+      labels:Array(MAX_PTS).fill(''),
+      datasets:[{data:Array(MAX_PTS).fill(null),borderColor:color,borderWidth:1.2,fill:true,
+        backgroundColor: color+'18',tension:0.4,pointRadius:0}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{x:{display:false},y:{display:false}}
+    }
+  });
+}
+const chVolt = buildSpark('sparkVolt','#ff6b35');
+const chCurr = buildSpark('sparkCurr','#00e5ff');
+const chTemp = buildSpark('sparkTemp','#fbbf24');
+function pushData(chart,val){
+  const d=chart.data.datasets[0].data;
+  d.push(val);if(d.length>MAX_PTS)d.shift();
+  chart.update('none');
+}
+
+// Log
+function log(text,cls='log-dim'){
+  const el=document.getElementById('console-output');
+  const d=document.createElement('div');
+  d.className=cls;d.textContent=text;
+  el.appendChild(d);
+  while(el.children.length>40)el.removeChild(el.firstChild);
+  el.scrollTop=el.scrollHeight;
+}
+
+// Camera error handling
+let camOk = false;
+function handleCamErr(){
+  document.getElementById('cam-img').style.display='none';
+  document.getElementById('sts-cam').textContent='NO FEED';
+  document.getElementById('sts-cam').className='sys-badge badge-err';
+  if(!camOk) log('[CAM] Stream unreachable — check Pi address','log-err');
+}
+document.getElementById('cam-img').onload=function(){
+  camOk=true;
+  document.getElementById('sts-cam').textContent='STREAMING';
+  document.getElementById('sts-cam').className='sys-badge badge-ok';
+};
+
+// SNAPSHOT FEATURE
+function captureSnapshot(){
+  const btn = document.getElementById('snap-btn');
+  const flash = document.getElementById('snap-flash');
+  const saved = document.getElementById('snap-saved');
+  const img = document.getElementById('cam-img');
+
+  // Flash effect
+  flash.classList.add('flash');
+  setTimeout(()=>flash.classList.remove('flash'),200);
+
+  // Try to capture
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640; canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    
+    if(img.complete && img.naturalWidth > 0 && img.style.display !== 'none'){
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    } else {
+      // Draw placeholder with telemetry overlay
+      ctx.fillStyle = '#040609';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#00b4ff';
+      ctx.font = 'bold 14px Space Mono, monospace';
+      ctx.fillText('CUBESAT-01 // SNAPSHOT', 20, 30);
+      ctx.fillStyle = '#4a7a9b';
+      ctx.font = '12px Space Mono, monospace';
+      const volt = document.getElementById('val-volt').textContent;
+      const curr = document.getElementById('val-curr').textContent;
+      const temp = document.getElementById('val-temp').textContent;
+      const pres = document.getElementById('val-pres').textContent;
+      ctx.fillText(`VOLTAGE: ${volt} V`, 20, 60);
+      ctx.fillText(`CURRENT: ${curr} mA`, 20, 80);
+      ctx.fillText(`TEMP:    ${temp} °C`, 20, 100);
+      ctx.fillText(`PRESSURE:${pres} hPa`, 20, 120);
+      ctx.fillText(new Date().toISOString(), 20, 450);
+    }
+    
+    // Draw telemetry overlay on top of image
+    ctx.fillStyle = 'rgba(4,6,9,0.55)';
+    ctx.fillRect(0, canvas.height-50, canvas.width, 50);
+    ctx.fillStyle = '#00b4ff';
+    ctx.font = '10px monospace';
+    const volt = document.getElementById('val-volt').textContent;
+    const curr = document.getElementById('val-curr').textContent;
+    const temp = document.getElementById('val-temp').textContent;
+    ctx.fillText(`CUBESAT-01  V:${volt}V  I:${curr}mA  T:${temp}°C  ${new Date().toISOString()}`, 8, canvas.height-10);
+    
+    // Download
+    const ts = new Date().toISOString().replace(/[:.]/g,'-').slice(0,-5);
+    const a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = `cubesat_snap_${ts}.png`;
+    a.click();
+    
+    saved.classList.add('show');
+    setTimeout(()=>saved.classList.remove('show'),2500);
+    log(`[CAM] Snapshot saved: cubesat_snap_${ts}.png`, 'log-snap');
+  } catch(e) {
+    log('[CAM] Snapshot failed — CORS or stream issue', 'log-err');
+    saved.textContent = '✗ Failed';
+    saved.style.color = '#ff3b5c';
+    saved.classList.add('show');
+    setTimeout(()=>{saved.classList.remove('show');saved.textContent='✓ Saved';saved.style.color='';},2500);
+  }
+}
+
+// Telemetry Poll
+const ENDPOINT = 'http://192.168.137.18/';
+let packets = 0;
+const start = Date.now();
+
+async function poll(){
+  try {
+    const r = await fetch(ENDPOINT,{cache:'no-store',signal:AbortSignal.timeout(2000)});
+    if(!r.ok) throw new Error();
+    const d = await r.json();
+    packets++;
+
+    const elapsed = (Date.now()-start)/1000;
+    document.getElementById('hz-indicator').textContent = `${(packets/elapsed).toFixed(2)} Hz`;
+    document.getElementById('pkt-count').textContent = packets;
+
+    document.getElementById('link-dot').className = 'live-dot ok';
+    document.getElementById('link-status').textContent = 'ONLINE';
+    document.getElementById('status-txt').textContent = 'CONNECTED';
+    document.getElementById('status-txt').className = 'sb-ok';
+    document.getElementById('sts-wifi').textContent = 'NOMINAL';
+    document.getElementById('sts-wifi').className = 'sys-badge badge-ok';
+
+    const v=d.voltage??null,c=d.current??null,p=d.power??null,t=d.temperature??null,pr=d.pressure??null;
+    document.getElementById('val-volt').textContent = v!==null?v.toFixed(2):'—';
+    document.getElementById('val-curr').textContent = c!==null?c.toFixed(1):'—';
+    document.getElementById('val-pwr').textContent  = p!==null?p.toFixed(1):'—';
+    document.getElementById('val-temp').textContent = t!==null?t.toFixed(1):'—';
+    document.getElementById('val-pres').textContent = pr!==null?pr.toFixed(1):'—';
+
+    // Power gauge (max 5000mW)
+    if(p!==null){
+      const pct = Math.min(100,(p/5000)*100);
+      document.getElementById('gauge-fill').style.width = pct+'%';
+      document.getElementById('gauge-val').textContent = p.toFixed(0)+'mW';
+      document.getElementById('pwr-pct').textContent = pct.toFixed(1)+'%';
+    }
+
+    if(v!==null)pushData(chVolt,v);
+    if(c!==null)pushData(chCurr,c);
+    if(t!==null)pushData(chTemp,t);
+
+    document.getElementById('sts-ina').textContent='NOMINAL';
+    document.getElementById('sts-ina').className='sys-badge badge-ok';
+    document.getElementById('sts-bmp').textContent='NOMINAL';
+    document.getElementById('sts-bmp').className='sys-badge badge-ok';
+
+    log(`[OK] Pkt#${packets} | V:${v?.toFixed(2)}V I:${c?.toFixed(1)}mA P:${p?.toFixed(1)}mW T:${t?.toFixed(1)}°C`,'log-ok');
+  } catch(e){
+    document.getElementById('link-dot').className='live-dot';
+    document.getElementById('link-status').textContent='OFFLINE';
+    document.getElementById('status-txt').textContent='DISCONNECTED';
+    document.getElementById('status-txt').className='sb-err';
+    document.getElementById('sts-wifi').textContent='OFFLINE';
+    document.getElementById('sts-wifi').className='sys-badge badge-err';
+    log('[ERR] ESP32 node unreachable — retrying...','log-err');
+  }
+}
+
+poll();
+setInterval(poll,1500);
+</script>
+</body>
+</html>
