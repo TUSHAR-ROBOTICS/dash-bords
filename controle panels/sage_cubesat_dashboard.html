@@ -1,0 +1,403 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#1a1d21;color:#b0bec5;font-family:'Courier New',monospace;font-size:10px}
+.root{display:grid;grid-template-rows:22px 1fr;height:720px;gap:0}
+.topnav{background:#111316;border-bottom:1px solid #2a2f36;display:flex;align-items:center;justify-content:space-between;padding:0 8px;gap:8px}
+.topnav-left{display:flex;align-items:center;gap:10px}
+.logo{font-size:11px;font-weight:500;color:#7cb8e8;letter-spacing:0.1em}
+.sat-id{font-size:10px;color:#6a7f8a;letter-spacing:0.06em}
+.topnav-right{display:flex;align-items:center;gap:12px;font-size:9px;color:#5a6a74}
+.grid4{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px;background:#0e1014;height:100%}
+.pane{background:#1c1f24;border:1px solid #252b32;display:flex;flex-direction:column;overflow:hidden;min-height:0}
+.pane-hdr{background:#111316;border-bottom:1px solid #252b32;padding:4px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.pane-hdr-left{display:flex;align-items:center;gap:8px}
+.pane-title{font-size:11px;font-weight:500;color:#d0dce4;letter-spacing:0.06em}
+.pane-meta{font-size:9px;color:#4a5f6a}
+.pane-badge{font-size:8px;padding:1px 6px;border:1px solid #2ecc71;color:#2ecc71;letter-spacing:0.06em}
+.pane-badge.warn{border-color:#f0a500;color:#f0a500}
+.pane-body{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.globe-wrap{flex:1;position:relative;overflow:hidden}
+.globe-canvas{display:block;width:100%;height:100%}
+.globe-overlay{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none}
+.sat-label{position:absolute;font-size:8px;color:#2ecc71;letter-spacing:0.06em;white-space:nowrap}
+.globe-footer{background:#111316;border-top:1px solid #252b32;padding:3px 8px;display:flex;justify-content:space-between;font-size:9px;color:#4a5f6a;flex-shrink:0}
+.chart-row{padding:6px 8px;flex:1;display:flex;flex-direction:column;min-height:0}
+.chart-title{font-size:9px;color:#7cb8e8;letter-spacing:0.06em;margin-bottom:3px}
+.chart-wrap{flex:1;position:relative;min-height:60px}
+.chart-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.readout-strip{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 8px;flex-shrink:0}
+.readout-card{background:#111316;border:1px solid #252b32;padding:6px 8px}
+.readout-card-label{font-size:8px;color:#4a5f6a;letter-spacing:0.06em;margin-bottom:2px}
+.readout-card-val{font-size:22px;font-weight:500;font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
+.readout-card-val.green{color:#2ecc71}
+.readout-card-val.amber{color:#f0a500}
+.readout-card-val.red{color:#e74c3c}
+.readout-card-sub{font-size:8px;color:#4a5f6a;margin-top:1px}
+.readout-card-tags{display:flex;gap:4px;margin-top:4px;flex-wrap:wrap}
+.tag{font-size:8px;padding:1px 5px;border:1px solid #252b32;color:#5a6a74}
+.tag.ok{border-color:#2ecc71;color:#2ecc71}
+.tag.warn{border-color:#f0a500;color:#f0a500}
+.multi-chart{display:flex;flex-direction:column;gap:4px;padding:6px 8px;flex:1;min-height:0}
+.mc-row{display:flex;flex-direction:column;flex:1;min-height:0}
+.mc-label{font-size:8px;color:#7cb8e8;letter-spacing:0.06em;margin-bottom:2px;display:flex;justify-content:space-between}
+.mc-label span{color:#4a5f6a}
+.mc-chart{flex:1;position:relative;min-height:40px}
+.mc-chart canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+.table-wrap{flex:1;overflow:hidden}
+.data-table{width:100%;border-collapse:collapse;font-size:9px}
+.data-table th{background:#111316;color:#4a5f6a;padding:3px 6px;text-align:left;border-bottom:1px solid #252b32;font-weight:400;letter-spacing:0.06em;position:sticky;top:0}
+.data-table td{padding:3px 6px;border-bottom:1px solid #1a1d21;color:#8a9faa}
+.data-table tr:hover td{background:#1e2228}
+.data-table td.green{color:#2ecc71}
+.data-table td.amber{color:#f0a500}
+.legend-row{display:flex;gap:12px;padding:4px 8px;flex-shrink:0;border-bottom:1px solid #252b32}
+.leg-item{display:flex;align-items:center;gap:4px;font-size:8px;color:#5a6a74}
+.leg-dot{width:8px;height:2px}
+</style>
+
+<h2 class="sr-only">SAGE CubeSat ground control dashboard with globe view, telemetry charts, sensor data, and subsystem readouts</h2>
+
+<div class="root">
+  <div class="topnav">
+    <div class="topnav-left">
+      <span class="logo">SAGE CubeSat</span>
+      <span class="sat-id">HELIO-B · 3U · SSO 521 km</span>
+      <span style="font-size:9px;color:#2ecc71" id="nav-utc">UTC 00:00:00</span>
+      <span style="font-size:9px;color:#4a5f6a" id="nav-met">MET 142:08:24</span>
+    </div>
+    <div class="topnav-right">
+      <span>Ground station: <span style="color:#2ecc71">KIRUNA</span></span>
+      <span>Pass 14 of 14</span>
+      <span>andrei.ivan@sero-space.ro</span>
+    </div>
+  </div>
+
+  <div class="grid4">
+
+    <div class="pane">
+      <div class="pane-hdr">
+        <div class="pane-hdr-left">
+          <span class="pane-title">Orbit track — nadir view</span>
+          <span class="pane-badge">LIVE</span>
+        </div>
+        <span class="pane-meta" id="orb-info">521.4 km · 97.4°</span>
+      </div>
+      <div class="pane-body">
+        <div class="globe-wrap">
+          <canvas id="globeCanvas" class="globe-canvas"></canvas>
+        </div>
+        <div class="globe-footer">
+          <span id="lat-lon">LAT −38.42° LON +148.71°</span>
+          <span>Pass over: <span style="color:#2ecc71">SE Australia</span></span>
+          <span>Next GS: Svalbard +47 min</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-hdr">
+        <div class="pane-hdr-left">
+          <span class="pane-title">HK_TC_TSS_TEMP_01</span>
+          <span class="pane-badge">NOMINAL</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="pane-meta" id="date1">03/10/2020</span>
+          <span class="pane-meta">→</span>
+          <span class="pane-meta" id="date2">03/16/2020</span>
+        </div>
+      </div>
+      <div class="pane-body">
+        <div class="legend-row">
+          <div class="leg-item"><div class="leg-dot" style="background:#2ecc71"></div>HK_TC_TSS_TEMP_01</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#f0a500"></div>Upper limit</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#e74c3c"></div>Lower limit</div>
+        </div>
+        <div class="chart-row" style="flex:1">
+          <div class="chart-wrap" style="min-height:100px">
+            <canvas id="tempChart"></canvas>
+          </div>
+        </div>
+        <div class="table-wrap" style="max-height:120px;overflow-y:auto">
+          <table class="data-table">
+            <thead><tr><th>#</th><th>Date</th><th>Parameter Name</th><th>Measured Value</th><th>LSS Measurement</th><th>USS Meas.</th><th>Status</th></tr></thead>
+            <tbody id="tbl-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-hdr">
+        <div class="pane-hdr-left">
+          <span class="pane-title" id="p3-title">HK_COM_STR025_MX1_TEMP_MAX</span>
+        </div>
+        <div style="display:flex;gap:10px">
+          <span class="pane-meta" id="p3-dt">Mon, 24 Mar 2025 09:09:01 GMT</span>
+          <span class="pane-meta">327 days 09 hrs 09 min 13 sec MET</span>
+        </div>
+      </div>
+      <div class="pane-body">
+        <div class="chart-row" style="flex:0 0 100px;min-height:0">
+          <div class="chart-wrap">
+            <canvas id="strChart"></canvas>
+          </div>
+        </div>
+        <div class="readout-strip">
+          <div class="readout-card">
+            <div class="readout-card-label">HK_PW_MISSION_MODE</div>
+            <div class="readout-card-val green" id="r1">00:17</div>
+            <div class="readout-card-sub">Mission mode active</div>
+            <div class="readout-card-tags">
+              <span class="tag ok">ENG</span><span class="tag ok">AUTO</span>
+            </div>
+          </div>
+          <div class="readout-card">
+            <div class="readout-card-label">HK_PW_MISSION_STATE</div>
+            <div class="readout-card-val green" id="r2">00:01:CE</div>
+            <div class="readout-card-sub">State nominal</div>
+            <div class="readout-card-tags">
+              <span class="tag ok">ACT</span><span class="tag">RDY</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-row" style="flex:1;min-height:0">
+          <div class="chart-title">HK_PW_IOV_REGULATOR_VOLTAGE</div>
+          <div class="chart-wrap">
+            <canvas id="voltChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane-hdr">
+        <div class="pane-hdr-left">
+          <span class="pane-title">Environmental sensors</span>
+          <span class="pane-badge warn">OBC WATCH</span>
+        </div>
+        <span class="pane-meta" id="env-dt">Mon, 24 Mar 2025 09:09:13 GMT</span>
+      </div>
+      <div class="pane-body">
+        <div class="multi-chart">
+          <div class="mc-row">
+            <div class="mc-label">Pressure <span id="press-val">101.3 kPa</span></div>
+            <div class="mc-chart"><canvas id="pressChart"></canvas></div>
+          </div>
+          <div class="mc-row">
+            <div class="mc-label">Humidity <span id="hum-val">42.1 %RH</span></div>
+            <div class="mc-chart"><canvas id="humChart"></canvas></div>
+          </div>
+          <div class="mc-row">
+            <div class="mc-label">Temperature <span id="env-temp-val" style="color:#f0a500">+61.2 °C</span></div>
+            <div class="mc-chart"><canvas id="envTempChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+(function(){
+var tick=0;
+var W=Chart.defaults;
+W.color='#4a5f6a';
+W.font.family='Courier New, monospace';
+W.font.size=8;
+
+function makeLabels(n,step){var a=[];for(var i=0;i<n;i++){var m=Math.floor(i*step/60),s=(i*step)%60;a.push(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));}return a;}
+function sineData(n,base,amp,freq,noise){var a=[];for(var i=0;i<n;i++){a.push(+(base+amp*Math.sin(i/freq)+(Math.random()-0.5)*noise).toFixed(2));}return a;}
+
+var chartOpts={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:true,ticks:{maxTicksLimit:6,color:'#3a4f5a'},grid:{color:'#1e2530'},border:{color:'#252b32'}},y:{display:true,ticks:{maxTicksLimit:4,color:'#3a4f5a'},grid:{color:'#1e2530'},border:{color:'#252b32'}}}};
+
+var N=60, labels=makeLabels(N,30);
+
+var tempChart=new Chart(document.getElementById('tempChart'),{type:'line',data:{labels:labels,datasets:[{data:sineData(N,22,8,10,1),borderColor:'#2ecc71',borderWidth:1.5,pointRadius:0,tension:0},{data:Array(N).fill(30),borderColor:'#f0a500',borderWidth:1,borderDash:[4,2],pointRadius:0},{data:Array(N).fill(10),borderColor:'#e74c3c',borderWidth:1,borderDash:[4,2],pointRadius:0}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var strChart=new Chart(document.getElementById('strChart'),{type:'line',data:{labels:labels,datasets:[{data:sineData(N,45,15,8,2),borderColor:'#2ecc71',borderWidth:1.5,pointRadius:0,tension:0},{data:sineData(N,45,15,8,2).map(function(v){return v+5}),borderColor:'#e74c3c',borderWidth:1,borderDash:[3,2],pointRadius:0}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var voltChart=new Chart(document.getElementById('voltChart'),{type:'line',data:{labels:labels,datasets:[{data:sineData(N,3.7,0.1,12,0.02),borderColor:'#7cb8e8',borderWidth:1.5,pointRadius:0,tension:0.3}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var pressChart=new Chart(document.getElementById('pressChart'),{type:'line',data:{labels:labels.slice(-20),datasets:[{data:sineData(20,101.3,0.4,5,0.05),borderColor:'#2ecc71',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(46,204,113,0.06)'}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var humChart=new Chart(document.getElementById('humChart'),{type:'line',data:{labels:labels.slice(-20),datasets:[{data:sineData(20,42,3,4,0.5),borderColor:'#7cb8e8',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(124,184,232,0.06)'}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var envTempChart=new Chart(document.getElementById('envTempChart'),{type:'line',data:{labels:labels.slice(-20),datasets:[{data:sineData(20,61,1.5,6,0.2),borderColor:'#f0a500',borderWidth:1.5,pointRadius:0,tension:0.3,fill:true,backgroundColor:'rgba(240,165,0,0.06)'}]},options:JSON.parse(JSON.stringify(chartOpts))});
+
+var tableData=[
+  ['1','Tue 17 Mar 2020 00:01','OBC Temp [Bus]','142.0°C','Mon 17 Mar 2020 00:01','Mon 17 Mar 2020 00:01','green'],
+  ['2','Tue 17 Mar 2020 01:01','Pipe* Temp1 [Bus]','142.0°C','Mon 17 Mar 2020 01:01','Mon 17 Mar 2020 01:01','green'],
+  ['3','Tue 17 Mar 2020 02:01','Pipe* Temp2 [Bus]','118.0°C','Mon 17 Mar 2020 02:01','Mon 17 Mar 2020 02:01','amber'],
+  ['4','Wed 18 Mar 2020 00:01','Pipe* Temp3 [Bus]','18.0°C','Mon 18 Mar 2020 00:01','Mon 18 Mar 2020 00:01','green'],
+];
+var tbody=document.getElementById('tbl-body');
+tableData.forEach(function(r){
+  var tr=document.createElement('tr');
+  tr.innerHTML='<td>'+r[0]+'</td><td>'+r[1]+'</td><td style="color:#7cb8e8">'+r[2]+'</td><td class="'+r[6]+'">'+r[3]+'</td><td>'+r[4]+'</td><td>'+r[5]+'</td><td class="'+r[6]+'">'+(r[6]==='green'?'OK':'WARN')+'</td>';
+  tbody.appendChild(tr);
+});
+
+var gcW, gcH;
+function resizeGlobe(){
+  var c=document.getElementById('globeCanvas');
+  var p=c.parentElement;
+  gcW=p.clientWidth; gcH=p.clientHeight;
+  c.width=gcW; c.height=gcH;
+}
+resizeGlobe();
+
+function drawGlobe(t){
+  var c=document.getElementById('globeCanvas');
+  var ctx=c.getContext('2d');
+  if(!ctx)return;
+  var w=gcW,h=gcH;
+  ctx.fillStyle='#0d1015';
+  ctx.fillRect(0,0,w,h);
+  var cx=w*0.42, cy=h*0.5, r=Math.min(w,h)*0.38;
+  ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);
+  ctx.fillStyle='#0a1a2e';ctx.fill();
+  ctx.strokeStyle='#1a3050';ctx.lineWidth=1;ctx.stroke();
+  for(var i=0;i<200;i++){
+    var sx=Math.random()*w,sy=Math.random()*h;
+    var dx=sx-cx,dy=sy-cy;
+    if(dx*dx+dy*dy>r*r+100){
+      ctx.fillStyle='rgba(255,255,255,'+(0.3+Math.random()*0.7)+')';
+      ctx.fillRect(sx,sy,Math.random()<0.1?2:1,Math.random()<0.1?2:1);
+    }
+  }
+  ctx.save();ctx.beginPath();ctx.arc(cx,cy,r,0,2*Math.PI);ctx.clip();
+  var rot=t*0.008;
+  var landPolys=[
+    [[0.1,0.3],[0.4,0.2],[0.55,0.25],[0.6,0.4],[0.5,0.55],[0.35,0.58],[0.15,0.5]],
+    [[0.55,0.55],[0.85,0.5],[0.9,0.65],[0.75,0.72],[0.6,0.68]],
+    [[-0.1,0.3],[0.05,0.25],[0.08,0.4],[0.0,0.48],[-0.1,0.42]],
+    [[0.2,0.6],[0.4,0.58],[0.42,0.72],[0.25,0.75],[0.18,0.68]],
+    [[0.1,0.15],[0.35,0.12],[0.4,0.22],[0.3,0.28],[0.12,0.25]],
+  ];
+  landPolys.forEach(function(poly,li){
+    ctx.beginPath();
+    poly.forEach(function(pt,i){
+      var angle=(pt[0]+rot)*Math.PI*1.6;
+      var lat=(pt[1]-0.5)*Math.PI;
+      var px=cx+r*Math.cos(lat)*Math.sin(angle);
+      var py=cy+r*Math.sin(lat)*0.85;
+      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    });
+    ctx.closePath();
+    ctx.fillStyle=li===1?'#1a4a2a':'#1e5530';
+    ctx.fill();
+    ctx.strokeStyle='#2a7040';ctx.lineWidth=0.5;ctx.stroke();
+  });
+  ctx.restore();
+  ctx.strokeStyle='rgba(46,204,113,0.25)';ctx.lineWidth=0.5;
+  for(var g=-60;g<=60;g+=30){
+    ctx.beginPath();
+    var gy=cy+r*(g/90)*0.85;
+    var rw=Math.sqrt(Math.max(0,r*r-(gy-cy)*(gy-cy)));
+    ctx.ellipse(cx,gy,rw,rw*0.15,0,0,2*Math.PI);
+    ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(46,204,113,0.15)';
+  for(var lon=0;lon<360;lon+=30){
+    var la=(lon/180*Math.PI+t*0.008);
+    ctx.beginPath();
+    for(var la2=-90;la2<=90;la2+=5){
+      var laR=la2/180*Math.PI;
+      var px=cx+r*Math.cos(laR)*Math.sin(la);
+      var py=cy+r*Math.sin(laR)*0.85;
+      if(la2===-90)ctx.moveTo(px,py);else ctx.lineTo(px,py);
+    }
+    ctx.stroke();
+  }
+  var satAngle=(t*0.012)%(2*Math.PI);
+  var satLat=Math.sin(t*0.005)*0.8;
+  var satX=cx+r*Math.cos(satLat)*Math.sin(satAngle)*0.98;
+  var satY=cy+r*Math.sin(satLat)*0.85;
+  var isVisible=Math.abs(Math.cos(satAngle))<0.8;
+  if(isVisible){
+    ctx.strokeStyle='rgba(46,204,113,0.5)';ctx.lineWidth=1;ctx.setLineDash([3,2]);
+    ctx.beginPath();ctx.moveTo(satX,satY);
+    var prev=[];
+    for(var s=1;s<=20;s++){
+      var pA=(satAngle-s*0.05)%(2*Math.PI);
+      var pL=Math.sin((t-s)*0.005)*0.8;
+      var px=cx+r*Math.cos(pL)*Math.sin(pA)*0.98;
+      var py=cy+r*Math.sin(pL)*0.85;
+      ctx.lineTo(px,py);
+    }
+    ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#2ecc71';
+    ctx.beginPath();ctx.arc(satX,satY,4,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle='rgba(46,204,113,0.4)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(satX,satY,10,0,2*Math.PI);ctx.stroke();
+    ctx.fillStyle='#2ecc71';ctx.font='bold 9px Courier New';
+    ctx.fillText('HELIO-B',satX+12,satY-5);
+    ctx.strokeStyle='rgba(46,204,113,0.3)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.arc(satX,satY,35,0,2*Math.PI);ctx.stroke();
+    var gsLon=0.6, gsLat=-0.05;
+    var gsX=cx+r*0.8*Math.cos(gsLat)*Math.sin(gsLon+t*0.008);
+    var gsY=cy+r*Math.sin(gsLat)*0.85;
+    ctx.fillStyle='#7cb8e8';ctx.beginPath();ctx.arc(gsX,gsY,3,0,2*Math.PI);ctx.fill();
+    ctx.strokeStyle='#7cb8e8';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.moveTo(satX,satY);ctx.lineTo(gsX,gsY);ctx.stroke();
+  }
+  var lat=(-38+Math.sin(t*0.005)*30).toFixed(2);
+  var lon=(148+t*0.5%360-180).toFixed(2);
+  document.getElementById('lat-lon').textContent='LAT '+lat+'°  LON '+lon+'°';
+}
+
+function updateCharts(){
+  [tempChart,strChart,voltChart].forEach(function(ch){
+    ch.data.datasets.forEach(function(ds,di){
+      if(di===0){
+        ds.data.shift();
+        var last=ds.data[ds.data.length-1];
+        var base=ch===voltChart?3.7:ch===strChart?45:22;
+        var amp=ch===voltChart?0.12:ch===strChart?15:8;
+        ds.data.push(+(base+amp*Math.sin(tick/10)+(Math.random()-0.5)*(ch===voltChart?0.02:1)).toFixed(2));
+      }
+    });
+    ch.data.labels.shift();
+    var m=Math.floor(tick*30/60),s=(tick*30)%60;
+    ch.data.labels.push(String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'));
+    ch.update('none');
+  });
+  [pressChart,humChart,envTempChart].forEach(function(ch,ci){
+    ch.data.datasets[0].data.shift();
+    var bases=[101.3,42,61],amps=[0.3,2,1.2];
+    ch.data.datasets[0].data.push(+(bases[ci]+amps[ci]*Math.sin(tick/8)+(Math.random()-0.5)*0.1).toFixed(2));
+    ch.data.labels.shift();
+    ch.data.labels.push('');
+    ch.update('none');
+  });
+  var envT=(61+Math.sin(tick/8)*1.2).toFixed(1);
+  document.getElementById('env-temp-val').textContent='+'+envT+' °C';
+  document.getElementById('press-val').textContent=(101.3+Math.sin(tick/6)*0.3).toFixed(1)+' kPa';
+  document.getElementById('hum-val').textContent=(42+Math.sin(tick/9)*2).toFixed(1)+' %RH';
+}
+
+function updateTime(){
+  var n=new Date();
+  var utc=[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(function(v){return String(v).padStart(2,'0')}).join(':');
+  document.getElementById('nav-utc').textContent='UTC '+utc;
+  var met=tick+142*3600+8*60+24;
+  var mh=Math.floor(met/3600),mm=Math.floor(met/60)%60,ms=met%60;
+  document.getElementById('nav-met').textContent='MET '+[mh,mm,ms].map(function(v){return String(v).padStart(2,'0')}).join(':');
+  var d=new Date();
+  document.getElementById('env-dt').textContent=d.toUTCString().replace(' GMT','')+ ' GMT';
+  document.getElementById('p3-dt').textContent=d.toUTCString().replace(' GMT','')+ ' GMT';
+}
+
+var frame=0;
+function loop(){
+  frame++;
+  if(frame%2===0){tick++;updateCharts();updateTime();}
+  drawGlobe(frame);
+  requestAnimationFrame(loop);
+}
+loop();
+})();
+</script>
