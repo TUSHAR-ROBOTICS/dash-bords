@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>◈ CubeSat · wise warsa · B&W</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#0a0a0b;--bg2:#121213;
+  --border:rgba(255,255,255,0.11);--border2:rgba(255,255,255,0.07);
+  --text:#ececea;--dim:#9d9d99;--dim2:#5f5f5c;
+  --sans:'Inter',system-ui,-apple-system,sans-serif;
+  --mono:'JetBrains Mono',monospace;
+}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;font-size:13px;}
+.topbar{height:42px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-bottom:1px solid var(--border);background:var(--bg2);flex-shrink:0;gap:12px;}
+.tb-left{display:flex;align-items:center;gap:14px;min-width:0;}
+.tb-title{font-size:16px;font-weight:700;letter-spacing:1px;color:#fff;white-space:nowrap;}
+.tb-sep{width:1px;height:16px;background:var(--border);flex-shrink:0;}
+.tb-tag{font-size:11px;font-weight:500;letter-spacing:0.5px;color:var(--dim);white-space:nowrap;}
+.tb-right{display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.live-dot{width:6px;height:6px;border-radius:50%;background:#8fd18f;flex-shrink:0;}
+.clock{font-family:var(--mono);font-size:13px;letter-spacing:1px;color:#fff;white-space:nowrap;}
+.esp-config{display:flex;align-items:center;gap:6px;}
+.esp-config input{background:#141414;border:1px solid var(--border2);border-radius:4px;color:#fff;font-family:var(--mono);font-size:11px;padding:4px 8px;width:130px;}
+.esp-config button{background:#fff;color:#000;border:none;border-radius:4px;font-family:var(--sans);font-size:11px;font-weight:600;padding:5px 10px;cursor:pointer;}
+.esp-config button:hover{background:#ddd;}
+.esp-config-label{font-size:10px;color:var(--dim2);letter-spacing:0.5px;}
+
+.body{display:flex;flex:1;overflow:hidden;min-height:0;}
+
+.col-3d{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;}
+.panel-label{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--dim);padding:7px 14px;border-bottom:1px solid var(--border2);flex-shrink:0;display:flex;justify-content:space-between;}
+.panel-label span{font-family:var(--mono);font-weight:400;color:var(--dim2);}
+#canvasContainer{flex:1;position:relative;min-height:0;border-bottom:1px solid var(--border2);background:#000;}
+#canvasContainer canvas{display:block;width:100%!important;height:100%!important;}
+.hud-mini{position:absolute;bottom:8px;right:10px;font-family:var(--mono);font-size:11px;letter-spacing:0.5px;color:rgba(255,255,255,0.45);text-align:right;line-height:1.5;pointer-events:none;}
+.calib-strip{padding:8px 12px;flex-shrink:0;border-bottom:1px solid var(--border);}
+.calib-title{font-size:9.5px;font-weight:600;color:var(--dim2);letter-spacing:0.5px;margin-bottom:6px;}
+.calib-row{display:flex;gap:6px;flex-wrap:wrap;}
+.calib-btn{flex:1;min-width:70px;padding:6px 4px;font-size:10px;font-weight:600;font-family:var(--sans);letter-spacing:0.3px;text-align:center;
+  background:#141414;border:1px solid var(--border2);border-radius:5px;color:var(--dim);cursor:pointer;user-select:none;transition:all 0.15s;}
+.calib-btn:hover{border-color:var(--dim2);}
+.calib-btn.on{background:#fff;color:#000;border-color:#fff;}
+.calib-hint{font-size:9px;color:var(--dim2);margin-top:6px;line-height:1.4;}
+
+.col-cam{width:320px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--border);overflow:hidden;}
+.cam-view{height:210px;flex-shrink:0;position:relative;overflow:hidden;background:#020202;}
+#camFeed{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity 0.5s;}
+#cam-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;}
+#cam-msg{font-family:var(--mono);font-size:10px;color:var(--dim2);letter-spacing:1px;}
+.corner{position:absolute;width:12px;height:12px;pointer-events:none;border-color:rgba(255,255,255,0.15);}
+.c-tl{top:6px;left:6px;border-top:1px solid;border-left:1px solid;}
+.c-tr{top:6px;right:6px;border-top:1px solid;border-right:1px solid;}
+.c-bl{bottom:6px;left:6px;border-bottom:1px solid;border-left:1px solid;}
+.c-br{bottom:6px;right:6px;border-bottom:1px solid;border-right:1px solid;}
+#cam-live-dot{display:none;position:absolute;top:8px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:1px;}
+.cam-info{padding:8px 14px;font-size:10px;color:var(--dim2);border-top:1px solid var(--border2);flex-shrink:0;font-family:var(--mono);}
+.cam-info a{color:#fff;}
+.cam-controls{flex:1;display:flex;flex-direction:column;gap:10px;padding:16px 14px;min-height:0;}
+.cam-btn-row{display:flex;gap:8px;}
+.cam-btn{flex:1;padding:12px 8px;font-size:13px;font-weight:600;font-family:var(--sans);letter-spacing:0.3px;text-align:center;
+  background:#141414;border:1px solid var(--border2);border-radius:6px;color:#fff;cursor:pointer;user-select:none;transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:6px;}
+.cam-btn:hover{border-color:var(--dim2);background:#1a1a1a;}
+.cam-btn:active{transform:scale(0.98);}
+.cam-btn.recording{background:#2a0d0d;border-color:#883333;color:#ff6b6b;animation:recpulse 1.5s infinite;}
+@keyframes recpulse{0%,100%{border-color:#883333;}50%{border-color:#ff6b6b;}}
+.cam-btn:disabled{opacity:0.35;cursor:not-allowed;}
+.cam-timer{text-align:center;font-family:var(--mono);font-size:13px;color:#ff6b6b;letter-spacing:1px;min-height:16px;}
+.cam-capture-note{font-size:10px;color:var(--dim2);line-height:1.5;text-align:center;margin-top:auto;}
+.cam-capture-note.error{color:#c07070;}
+.cam-config{display:flex;align-items:center;gap:6px;padding:6px 12px;background:var(--bg2);border-bottom:1px solid var(--border2);}
+.cam-config input{background:#141414;border:1px solid var(--border2);border-radius:4px;color:#fff;font-family:var(--mono);font-size:10px;padding:3px 6px;width:140px;}
+.cam-config button{background:#fff;color:#000;border:none;border-radius:4px;font-family:var(--sans);font-size:10px;font-weight:600;padding:4px 8px;cursor:pointer;}
+.cam-config button:hover{background:#ddd;}
+.cam-config-label{font-size:9px;color:var(--dim2);letter-spacing:0.5px;}
+
+.col-data{flex:1;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:minmax(200px,1fr) minmax(200px,1fr) 190px 60px 108px;overflow:hidden;min-height:0;}
+.card{border-right:1px solid var(--border2);border-bottom:1px solid var(--border2);display:flex;flex-direction:column;overflow:hidden;min-height:0;}
+.col-data>.card:nth-child(3n){border-right:none;}
+.card.span3{grid-column:1/4;border-right:none;}
+.card-h{font-size:11px;font-weight:600;letter-spacing:0.5px;color:var(--dim);padding:6px 14px;border-bottom:1px solid var(--border2);flex-shrink:0;display:flex;justify-content:space-between;}
+.card-h span{font-family:var(--mono);font-weight:400;font-size:10px;color:var(--dim2);}
+.card-body{flex:1;padding:8px 14px;overflow-y:auto;overflow-x:hidden;min-height:0;display:flex;flex-direction:column;justify-content:flex-start;gap:4px;}
+.card-body::-webkit-scrollbar{width:3px;}
+.card-body::-webkit-scrollbar-thumb{background:var(--border);}
+.row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;}
+.rk{font-size:12px;color:var(--dim);font-weight:500;}
+.rv{font-family:var(--mono);font-size:15px;font-weight:500;color:#fff;}
+.rv.dim{color:var(--dim);font-size:13px;}
+.rv.warn{color:#bbb;}
+.stat-trio{display:flex;justify-content:space-between;gap:8px;padding:6px 0 10px;}
+.stat-item{flex:1;text-align:center;border-right:1px solid var(--border2);}
+.stat-item:last-child{border-right:none;}
+.stat-num{font-family:var(--mono);font-size:24px;font-weight:600;color:#fff;line-height:1;}
+.stat-unit{font-size:10px;color:var(--dim2);font-weight:500;margin-top:4px;}
+.chart-wrap{height:44px;position:relative;margin-top:4px;}
+.rings{display:flex;justify-content:space-around;align-items:center;flex:1;}
+.ring-item{display:flex;flex-direction:column;align-items:center;gap:4px;}
+.ring-lbl{font-size:10px;font-weight:600;letter-spacing:0.5px;color:var(--dim2);}
+.ring-progress{transition:stroke-dashoffset 0.35s cubic-bezier(0.4,0,0.2,1);}
+.gps-status{font-size:11px;font-weight:600;letter-spacing:0.5px;padding:4px 10px;border-radius:4px;background:rgba(255,255,255,0.06);color:var(--dim);display:inline-block;margin:2px 0 8px 0;}
+
+.map-card{padding:0!important;position:relative;}
+.map-frame-wrap{flex:1;position:relative;min-height:0;}
+#gpsMap{width:100%;height:100%;background:#0a0a0a;}
+.leaflet-tile-pane{filter:grayscale(0.5) invert(0.92) contrast(0.9) brightness(0.95);}
+.map-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000;pointer-events:none;z-index:1000;}
+.map-overlay span{font-size:11px;color:var(--dim2);letter-spacing:1px;}
+.map-coords{position:absolute;bottom:8px;left:10px;font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.8);background:rgba(0,0,0,0.6);padding:3px 8px;border-radius:4px;pointer-events:none;z-index:1000;}
+
+.health-row{display:flex;gap:22px;align-items:center;height:100%;padding:0 14px;overflow:hidden;}
+.health-item{display:flex;flex-direction:column;gap:1px;}
+.health-item .rk{font-size:9.5px;}
+.health-item .rv{font-size:13px;}
+
+.console-body{flex:1;overflow-y:auto;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.6;white-space:pre-wrap;word-break:break-all;padding:4px 14px;min-height:0;}
+.console-body::-webkit-scrollbar{width:3px;}
+.console-body::-webkit-scrollbar-thumb{background:var(--border);}
+.log-w{color:#fff;display:block;}.log-d{color:var(--dim2);display:block;}
+
+.statusbar{height:24px;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0;}
+.sb-item{font-size:10px;font-weight:500;letter-spacing:0.5px;color:var(--dim2);display:flex;align-items:center;gap:5px;}
+.sb-dot{width:5px;height:5px;border-radius:50%;background:#fff;}
+.sb-dot.off{background:var(--dim2);}
+
+@media (max-width: 900px) {
+  html,body{height:auto;overflow-y:auto;overflow-x:hidden;}
+  body{font-size:14px;}
+  .topbar{height:auto;flex-wrap:wrap;padding:8px 12px;gap:6px;}
+  .body{flex-direction:column;overflow:visible;height:auto;}
+  .col-3d{width:100%;border-right:none;border-bottom:1px solid var(--border);}
+  #canvasContainer{height:260px;flex:none;}
+  .calib-row{flex-wrap:wrap;}
+  .calib-btn{min-width:45%;}
+  .col-cam{width:100%;border-left:none;border-top:1px solid var(--border);order:99;}
+  .col-data{display:flex;flex-direction:column;grid-template-columns:none;grid-template-rows:none;height:auto;}
+  .card{border-right:none!important;min-height:150px;}
+  .card.span3{grid-column:auto;}
+  .card-body{padding:10px 16px;}
+  .stat-num{font-size:22px;}
+  .health-row{flex-wrap:wrap;gap:14px 22px;height:auto;padding:10px 14px;}
+  .console-body{max-height:160px;}
+  .map-frame-wrap{height:220px;}
+  .statusbar{height:auto;flex-wrap:wrap;padding:6px 12px;gap:6px 14px;}
+}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="tb-left">
+    <span class="tb-title">◈ CubeSat · B&W</span>
+    <div class="tb-sep"></div>
+    <span class="tb-tag">wise warsa · monochrome</span>
+  </div>
+  <div class="tb-right">
+    <div class="esp-config">
+      <span class="esp-config-label">ESP32</span>
+      <input type="text" id="esp-ip-input" placeholder="192.168.137.223">
+      <button id="esp-ip-save">Save</button>
+    </div>
+    <div class="tb-sep"></div>
+    <div class="live-dot"></div>
+    <span class="tb-tag" id="link-tag">Connecting...</span>
+    <div class="tb-sep"></div>
+    <span class="clock" id="clk">UTC 00:00:00</span>
+  </div>
+</div>
+
+<div class="body">
+
+  <div class="col-3d">
+    <div class="panel-label">3D Attitude <span id="fps-hud">60 FPS</span></div>
+    <div id="canvasContainer">
+      <div class="hud-mini" id="rot-hud">P: 0.0&nbsp;&nbsp;R: 0.0&nbsp;&nbsp;Y: 0.0</div>
+    </div>
+    <div class="calib-strip">
+      <div class="calib-title">Orientation Calibration</div>
+      <div class="calib-row">
+        <div class="calib-btn" id="btn-swap">Swap P/R</div>
+        <div class="calib-btn" id="btn-invroll">Inv Roll</div>
+        <div class="calib-btn" id="btn-invpitch">Inv Pitch</div>
+        <div class="calib-btn" id="btn-invyaw">Inv Yaw</div>
+      </div>
+      <div class="calib-hint">Tilt the board — toggle until model matches. Saved in browser.</div>
+    </div>
+  </div>
+
+  <div class="col-data">
+
+    <div class="card">
+      <div class="card-h">Barometer <span>BMP280</span></div>
+      <div class="card-body">
+        <div class="stat-trio">
+          <div class="stat-item"><div class="stat-num" id="alt">--</div><div class="stat-unit">Alt (m)</div></div>
+          <div class="stat-item"><div class="stat-num" id="temp">--</div><div class="stat-unit">Temp (°C)</div></div>
+          <div class="stat-item"><div class="stat-num" id="vrate">--</div><div class="stat-unit">V-Rate (m/s)</div></div>
+        </div>
+        <div class="row"><span class="rk">Pressure</span><span class="rv dim" id="press">--</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Accelerometer <span>ICM-20948</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">X</span><span class="rv" id="ax">--</span></div>
+        <div class="row"><span class="rk">Y</span><span class="rv" id="ay">--</span></div>
+        <div class="row"><span class="rk">Z</span><span class="rv" id="az">--</span></div>
+        <div class="row"><span class="rk">Vibration</span><span class="rv dim" id="vib">--</span></div>
+        <div class="chart-wrap"><canvas id="accelChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Attitude <span>calibrated</span></div>
+      <div class="card-body">
+        <div class="rings">
+          <div class="ring-item">
+            <svg width="50" height="50" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="rgba(255,255,255,0.08)" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#fff" stroke-width="2" fill="none" stroke-dasharray="119" id="r-roll" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#fff" id="rv-roll">0°</text>
+            </svg>
+            <span class="ring-lbl">Roll</span>
+          </div>
+          <div class="ring-item">
+            <svg width="50" height="50" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="rgba(255,255,255,0.08)" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#bbb" stroke-width="2" fill="none" stroke-dasharray="119" id="r-pitch" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#bbb" id="rv-pitch">0°</text>
+            </svg>
+            <span class="ring-lbl">Pitch</span>
+          </div>
+          <div class="ring-item">
+            <svg width="50" height="50" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="rgba(255,255,255,0.08)" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#777" stroke-width="2" fill="none" stroke-dasharray="119" id="r-yaw" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="28" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#888" id="rv-yaw">0°</text>
+            </svg>
+            <span class="ring-lbl">Yaw</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Gyroscope <span>ICM-20948</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">X</span><span class="rv" id="gx">--</span></div>
+        <div class="row"><span class="rk">Y</span><span class="rv" id="gy">--</span></div>
+        <div class="row"><span class="rk">Z</span><span class="rv" id="gz">--</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">Power <span>INA219</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">Bus Voltage</span><span class="rv" id="bvolt">--</span></div>
+        <div class="row"><span class="rk">Current</span><span class="rv" id="bcurr">--</span></div>
+        <div class="row"><span class="rk">Power</span><span class="rv" id="bpow">--</span></div>
+        <div class="chart-wrap"><canvas id="voltChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">GPS <span id="gps-badge">Not Connected</span></div>
+      <div class="card-body">
+        <div class="gps-status" id="gps-status">NO MODULE DETECTED</div>
+        <div class="row"><span class="rk">Latitude</span><span class="rv" id="gps-lat">--</span></div>
+        <div class="row"><span class="rk">Longitude</span><span class="rv" id="gps-lon">--</span></div>
+        <div class="row"><span class="rk">Satellites</span><span class="rv" id="gps-sats">--</span></div>
+        <div class="row"><span class="rk">HDOP</span><span class="rv dim" id="gps-hdop">--</span></div>
+      </div>
+    </div>
+
+    <div class="card map-card span3">
+      <div class="card-h">GPS Location <span id="map-status">No fix</span></div>
+      <div class="map-frame-wrap">
+        <div id="gpsMap"></div>
+        <div class="map-overlay" id="map-overlay"><span>Waiting for GPS fix...</span></div>
+        <div class="map-coords" id="map-coords" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="card span3">
+      <div class="card-h">System Health</div>
+      <div class="health-row">
+        <div class="health-item"><span class="rk">WiFi RSSI</span><span class="rv" id="rssi">--</span></div>
+        <div class="health-item"><span class="rk">CPU Temp</span><span class="rv warn" id="cputemp">--</span></div>
+        <div class="health-item"><span class="rk">Uptime</span><span class="rv" id="upt">--</span></div>
+        <div class="health-item"><span class="rk">Errors / Reconnects</span><span class="rv dim" id="errsline">--</span></div>
+      </div>
+    </div>
+
+    <div class="card span3">
+      <div class="card-h">Console <span>Live</span></div>
+      <div class="console-body" id="con"><span class="log-w">// CubeSat OS · wise warsa · monochrome</span>
+<span class="log-d">[BOOT] Set ESP32 IP above, waiting for telemetry...</span>
+</div>
+    </div>
+
+  </div>
+
+  <div class="col-cam">
+    <div class="panel-label">Pi Camera <span id="cam-status">Connecting...</span></div>
+    <div class="cam-config">
+      <span class="cam-config-label">CAM IP</span>
+      <input type="text" id="cam-ip-input" placeholder="192.168.137.119:5000">
+      <button id="cam-ip-save">Set</button>
+      <span id="cam-ip-status" style="font-size:8px;color:var(--dim2);">saved</span>
+    </div>
+    <div class="cam-view">
+      <img id="camFeed" alt="" crossorigin="anonymous"/>
+      <div id="cam-overlay">
+        <span id="cam-msg">Connecting...</span>
+      </div>
+      <div class="corner c-tl"></div><div class="corner c-tr"></div>
+      <div class="corner c-bl"></div><div class="corner c-br"></div>
+      <div id="cam-live-dot">● REC</div>
+    </div>
+    <div class="cam-info" style="display:flex;justify-content:space-between;">
+      <span id="cam-endpoint">—</span>
+      <span id="cam-res">—</span>
+    </div>
+    <div class="cam-controls">
+      <div class="cam-btn-row">
+        <button class="cam-btn" id="cam-photo-btn">📷 Take Photo</button>
+      </div>
+      <div class="cam-btn-row">
+        <button class="cam-btn" id="cam-rec-btn">⏺ Start Recording</button>
+      </div>
+      <div class="cam-timer" id="cam-rec-timer"></div>
+      <div class="cam-capture-note" id="cam-capture-note">Photos (.jpg) & videos (.webm) download directly.</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="statusbar">
+  <div class="sb-item"><div class="sb-dot off" id="dot-attitude"></div>Attitude</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-baro"></div>Barometer</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-wifi"></div>WiFi</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-power"></div>Power</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-gps"></div>GPS</div>
+  <div class="sb-item">Frame <span id="fc" style="color:#fff">0</span></div>
+  <div class="sb-item" style="color:#444">v1.5 · wise warsa</div>
+</div>
+
+<script>
+// ============ ESP32 IP CONFIG ============
+let ESP32_IP = localStorage.getItem('cubesat_esp32_ip') || '192.168.137.223';
+document.getElementById('esp-ip-input').value = ESP32_IP;
+document.getElementById('esp-ip-input').placeholder = ESP32_IP;
+
+document.getElementById('esp-ip-save').onclick = () => {
+  const val = document.getElementById('esp-ip-input').value.trim();
+  if (val) {
+    ESP32_IP = val;
+    localStorage.setItem('cubesat_esp32_ip', ESP32_IP);
+    document.getElementById('link-tag').textContent = 'Reconnecting...';
+  }
+};
+document.getElementById('esp-ip-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('esp-ip-save').click();
+});
+
+// ============ CAMERA IP CONFIG ============
+let CAM_IP = localStorage.getItem('cubesat_cam_ip') || '192.168.137.119:5000';
+document.getElementById('cam-ip-input').value = CAM_IP;
+document.getElementById('cam-ip-input').placeholder = CAM_IP;
+
+document.getElementById('cam-ip-save').onclick = () => {
+  const val = document.getElementById('cam-ip-input').value.trim();
+  if (val) {
+    CAM_IP = val;
+    localStorage.setItem('cubesat_cam_ip', CAM_IP);
+    document.getElementById('cam-ip-status').textContent = '✓';
+    document.getElementById('cam-ip-status').style.color = '#8fd18f';
+    // Restart camera connection
+    restartCamera();
+    setTimeout(() => {
+      document.getElementById('cam-ip-status').textContent = 'saved';
+      document.getElementById('cam-ip-status').style.color = 'var(--dim2)';
+    }, 2000);
+  }
+};
+document.getElementById('cam-ip-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('cam-ip-save').click();
+});
+
+// ============ CLOCK ============
+function tick(){
+  const n=new Date(),p=v=>String(v).padStart(2,'0');
+  document.getElementById('clk').textContent=`UTC ${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
+}
+setInterval(tick,1000);tick();
+
+// ============ ORIENTATION CALIBRATION ============
+let calib = { swap:false, invRoll:false, invPitch:false, invYaw:false };
+try {
+  const saved = localStorage.getItem('cubesat_calib');
+  if (saved) calib = JSON.parse(saved);
+} catch(e) {}
+function saveCalib(){ try{ localStorage.setItem('cubesat_calib', JSON.stringify(calib)); }catch(e){} }
+function refreshCalibButtons(){
+  document.getElementById('btn-swap').classList.toggle('on', calib.swap);
+  document.getElementById('btn-invroll').classList.toggle('on', calib.invRoll);
+  document.getElementById('btn-invpitch').classList.toggle('on', calib.invPitch);
+  document.getElementById('btn-invyaw').classList.toggle('on', calib.invYaw);
+}
+document.getElementById('btn-swap').onclick = () => { calib.swap = !calib.swap; saveCalib(); refreshCalibButtons(); };
+document.getElementById('btn-invroll').onclick = () => { calib.invRoll = !calib.invRoll; saveCalib(); refreshCalibButtons(); };
+document.getElementById('btn-invpitch').onclick = () => { calib.invPitch = !calib.invPitch; saveCalib(); refreshCalibButtons(); };
+document.getElementById('btn-invyaw').onclick = () => { calib.invYaw = !calib.invYaw; saveCalib(); refreshCalibButtons(); };
+refreshCalibButtons();
+
+function applyCalib(rawRoll, rawPitch, rawYaw){
+  let r = rawRoll, p = rawPitch, y = rawYaw;
+  if (calib.swap) { const t = r; r = p; p = t; }
+  if (calib.invRoll)  r = -r;
+  if (calib.invPitch) p = -p;
+  if (calib.invYaw)   y =

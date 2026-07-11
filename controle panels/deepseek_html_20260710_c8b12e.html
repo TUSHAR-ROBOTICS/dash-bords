@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>◈ CubeSat · wise warsa · monochrome</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    /* ----- pure monochrome · wise warsa style · black & white inverted ----- */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #111111; color: #eeeeee; font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-size: 14px; line-height: 1.5; height: 100vh; overflow: hidden;
+    }
+    :root {
+      --bg-card: #1a1a1a; --border-card: #333333; --text-dim: #888888;
+      --accent: #ffffff; --accent-soft: #555555;
+    }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #222; }
+    ::-webkit-scrollbar-thumb { background: #666; border-radius: 8px; }
+
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 20px; background: #0a0a0a; border-bottom: 1px solid #2a2a2a;
+      flex-shrink: 0; flex-wrap: wrap; gap: 6px 12px;
+    }
+    .tb-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .tb-title { font-weight: 700; font-size: 20px; letter-spacing: -0.3px; color: #fff; }
+    .tb-tag { color: var(--text-dim); font-size: 13px; font-weight: 400; }
+    .tb-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .esp-config { display: flex; align-items: center; gap: 6px; background: #1a1a1a; padding: 3px 12px 3px 14px; border-radius: 40px; border: 1px solid #333; }
+    .esp-config input { background: transparent; border: none; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; width: 130px; padding: 5px 0; outline: none; }
+    .esp-config button { background: #fff; border: none; border-radius: 30px; color: #000; font-weight: 600; font-size: 12px; padding: 4px 14px; cursor: pointer; transition: 0.15s; }
+    .esp-config button:hover { background: #ccc; }
+    .live-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; flex-shrink: 0; }
+    .clock { font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #ddd; letter-spacing: 0.3px; }
+
+    .body { display: flex; flex: 1; overflow: hidden; min-height: 0; gap: 0; background: #0d0d0d; }
+    /* left 3D column */
+    .col-3d { width: 330px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid #2a2a2a; background: #0f0f0f; }
+    .panel-label { font-size: 13px; font-weight: 500; color: var(--text-dim); padding: 10px 16px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; background: #0a0a0a; }
+    #canvasContainer { flex: 1; position: relative; min-height: 200px; background: #0a0a0a; border-bottom: 1px solid #222; }
+    #canvasContainer canvas { display: block; width: 100% !important; height: 100% !important; }
+    .hud-mini { position: absolute; bottom: 10px; right: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #aaa; pointer-events: none; letter-spacing: 0.2px; background: #1a1a1acc; padding: 2px 10px; border-radius: 20px; backdrop-filter: blur(2px); }
+    .calib-strip { padding: 10px 14px; background: #0a0a0a; border-bottom: 1px solid #222; }
+    .calib-title { font-size: 11px; font-weight: 600; color: var(--text-dim); letter-spacing: 0.4px; margin-bottom: 8px; text-transform: uppercase; }
+    .calib-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .calib-btn { flex: 1; min-width: 70px; padding: 8px 4px; font-size: 11px; font-weight: 500; text-align: center;
+      background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: #ccc; cursor: pointer; transition: 0.1s; }
+    .calib-btn:hover { border-color: #888; background: #222; }
+    .calib-btn.on { background: #fff; color: #000; border-color: #fff; }
+    .calib-hint { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.4; }
+
+    /* center data grid */
+    .col-data { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(150px, auto); overflow-y: auto; background: #0d0d0d; padding: 0; gap: 0; }
+    .card { background: #0f0f0f; border-right: 1px solid #222; border-bottom: 1px solid #222; display: flex; flex-direction: column; overflow: hidden; }
+    .card.span3 { grid-column: 1 / 4; border-right: none; }
+    .card-h { font-size: 13px; font-weight: 500; color: var(--text-dim); padding: 8px 14px; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; background: #0a0a0a; }
+    .card-h span { font-size: 11px; color: #666; font-weight: 400; }
+    .card-body { flex: 1; padding: 8px 14px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; background: #0f0f0f; }
+    .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1a1a1a; }
+    .rk { color: #888; font-weight: 400; }
+    .rv { font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #eee; }
+    .rv.dim { color: #777; }
+    .stat-trio { display: flex; justify-content: space-around; padding: 6px 0 10px; }
+    .stat-item { text-align: center; flex: 1; border-right: 1px solid #222; }
+    .stat-item:last-child { border-right: none; }
+    .stat-num { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 600; color: #fff; line-height: 1.2; }
+    .stat-unit { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+    .chart-wrap { height: 44px; margin-top: 4px; position: relative; }
+    .rings { display: flex; justify-content: space-around; align-items: center; padding: 6px 0; }
+    .ring-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .ring-lbl { font-size: 11px; color: var(--text-dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+    .ring-progress { transition: stroke-dashoffset 0.3s ease; }
+    .gps-status { font-size: 12px; font-weight: 500; padding: 4px 12px; border-radius: 30px; background: #1a1a1a; color: #ccc; display: inline-block; margin: 4px 0 8px; border: 1px solid #333; }
+
+    /* map card */
+    .map-card { padding: 0 !important; }
+    .map-frame-wrap { flex: 1; position: relative; min-height: 180px; background: #0a0a0a; }
+    #gpsMap { width: 100%; height: 100%; background: #0a0a0a; }
+    .leaflet-tile-pane { filter: grayscale(1) invert(1) contrast(1.1) brightness(0.9); }
+    .map-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #0d0d0dcc; pointer-events: none; z-index: 1000; }
+    .map-overlay span { font-size: 13px; color: #aaa; letter-spacing: 0.3px; }
+    .map-coords { position: absolute; bottom: 8px; left: 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #ddd; background: #1a1a1acc; padding: 4px 14px; border-radius: 20px; pointer-events: none; z-index: 1000; backdrop-filter: blur(4px); border: 1px solid #333; }
+
+    .health-row { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding: 6px 14px; background: #0f0f0f; }
+    .health-item { display: flex; flex-direction: column; gap: 0; }
+    .health-item .rk { font-size: 11px; color: #777; }
+    .health-item .rv { font-size: 14px; }
+
+    .console-body { flex: 1; overflow-y: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #aaa; padding: 6px 14px 10px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; background: #0a0a0a; }
+    .log-w { color: #fff; font-weight: 500; }
+    .log-d { color: #666; }
+
+    /* right column camera */
+    .col-cam { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; border-left: 1px solid #2a2a2a; background: #0f0f0f; }
+    .cam-view { height: 200px; flex-shrink: 0; position: relative; background: #0a0a0a; overflow: hidden; }
+    #camFeed { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.5s; background: #0a0a0a; }
+    #cam-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #0d0d0d; }
+    #cam-msg { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #666; }
+    .corner { position: absolute; width: 14px; height: 14px; pointer-events: none; border-color: #555; }
+    .c-tl { top: 6px; left: 6px; border-top: 1.5px solid; border-left: 1.5px solid; }
+    .c-tr { top: 6px; right: 6px; border-top: 1.5px solid; border-right: 1.5px solid; }
+    .c-bl { bottom: 6px; left: 6px; border-bottom: 1.5px solid; border-left: 1.5px solid; }
+    .c-br { bottom: 6px; right: 6px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
+    #cam-live-dot { display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #fff; letter-spacing: 1px; background: #1a1a1acc; padding: 2px 16px; border-radius: 30px; backdrop-filter: blur(2px); border: 1px solid #444; }
+    .cam-info { padding: 6px 14px; font-size: 11px; color: #666; border-top: 1px solid #222; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; background: #0a0a0a; }
+    .cam-controls { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: #0f0f0f; }
+    .cam-btn-row { display: flex; gap: 8px; }
+    .cam-btn { flex: 1; padding: 12px 8px; font-size: 14px; font-weight: 500; text-align: center; background: #1a1a1a; border: 1px solid #333; border-radius: 10px; color: #ddd; cursor: pointer; transition: 0.15s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .cam-btn:hover { border-color: #888; background: #222; }
+    .cam-btn:active { transform: scale(0.97); }
+    .cam-btn.recording { background: #2a2a2a; border-color: #888; color: #fff; animation: recpulse 1.4s infinite; }
+    @keyframes recpulse { 0%,100% { border-color: #888; } 50% { border-color: #fff; } }
+    .cam-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .cam-timer { text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 15px; color: #ddd; min-height: 22px; letter-spacing: 0.5px; }
+    .cam-capture-note { font-size: 12px; color: #666; line-height: 1.5; text-align: center; margin-top: 6px; }
+    .cam-capture-note.error { color: #aa5555; }
+
+    /* statusbar */
+    .statusbar { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 18px; border-top: 1px solid #222; background: #0a0a0a; flex-shrink: 0; font-size: 12px; color: #666; }
+    .sb-item { display: flex; align-items: center; gap: 6px; }
+    .sb-dot { width: 8px; height: 8px; border-radius: 50%; background: #fff; }
+    .sb-dot.off { background: #444; }
+
+    @media (max-width: 1000px) {
+      body { height: auto; overflow-y: auto; }
+      .body { flex-direction: column; height: auto; overflow: visible; }
+      .col-3d { width: 100%; border-right: none; border-bottom: 1px solid #2a2a2a; }
+      #canvasContainer { height: 280px; }
+      .col-data { display: flex; flex-direction: column; grid-template-columns: none; }
+      .card { border-right: none !important; min-height: 140px; }
+      .card.span3 { grid-column: auto; }
+      .col-cam { width: 100%; border-left: none; border-top: 1px solid #2a2a2a; }
+      .cam-view { height: 220px; }
+      .stat-num { font-size: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="tb-left">
+    <span class="tb-title">◈ CubeSat · wise warsa</span>
+    <span class="tb-tag">monochrome · inverted</span>
+  </div>
+  <div class="tb-right">
+    <div class="esp-config">
+      <span style="color:#888;font-size:12px;">ESP32</span>
+      <input type="text" id="esp-ip-input" placeholder="192.168.137.223">
+      <button id="esp-ip-save">save</button>
+    </div>
+    <div class="live-dot" id="liveDot"></div>
+    <span class="tb-tag" id="link-tag" style="color:#888;">connecting...</span>
+    <span class="clock" id="clk">UTC 00:00:00</span>
+  </div>
+</div>
+
+<div class="body">
+
+  <!-- 3D column -->
+  <div class="col-3d">
+    <div class="panel-label">✦ attitude <span id="fps-hud">60 FPS</span></div>
+    <div id="canvasContainer">
+      <div class="hud-mini" id="rot-hud">P 0.0°  R 0.0°  Y 0.0°</div>
+    </div>
+    <div class="calib-strip">
+      <div class="calib-title">calibration · quick adjust</div>
+      <div class="calib-row">
+        <div class="calib-btn" id="btn-swap">swap P/R</div>
+        <div class="calib-btn" id="btn-invroll">inv roll</div>
+        <div class="calib-btn" id="btn-invpitch">inv pitch</div>
+        <div class="calib-btn" id="btn-invyaw">inv yaw</div>
+      </div>
+      <div class="calib-hint">tilt your board – toggle until the 3D model matches. saved in browser.</div>
+    </div>
+  </div>
+
+  <!-- data grid -->
+  <div class="col-data">
+
+    <div class="card">
+      <div class="card-h">▦ barometer <span>BMP280</span></div>
+      <div class="card-body">
+        <div class="stat-trio">
+          <div class="stat-item"><div class="stat-num" id="alt">--</div><div class="stat-unit">altitude (m)</div></div>
+          <div class="stat-item"><div class="stat-num" id="temp">--</div><div class="stat-unit">temp (°C)</div></div>
+          <div class="stat-item"><div class="stat-num" id="vrate">--</div><div class="stat-unit">v-rate (m/s)</div></div>
+        </div>
+        <div class="row"><span class="rk">pressure</span><span class="rv dim" id="press">-- hPa</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">▦ accelerometer <span>ICM-20948</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">X</span><span class="rv" id="ax">--</span></div>
+        <div class="row"><span class="rk">Y</span><span class="rv" id="ay">--</span></div>
+        <div class="row"><span class="rk">Z</span><span class="rv" id="az">--</span></div>
+        <div class="row"><span class="rk">vibration</span><span class="rv dim" id="vib">--</span></div>
+        <div class="chart-wrap"><canvas id="accelChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">▦ attitude <span>calibrated</span></div>
+      <div class="card-body">
+        <div class="rings">
+          <div class="ring-item">
+            <svg width="54" height="54" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="#333" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#fff" stroke-width="2" fill="none" stroke-dasharray="119" id="r-roll" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="29" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#fff" id="rv-roll">0°</text>
+            </svg>
+            <span class="ring-lbl">roll</span>
+          </div>
+          <div class="ring-item">
+            <svg width="54" height="54" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="#333" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#aaa" stroke-width="2" fill="none" stroke-dasharray="119" id="r-pitch" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="29" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#aaa" id="rv-pitch">0°</text>
+            </svg>
+            <span class="ring-lbl">pitch</span>
+          </div>
+          <div class="ring-item">
+            <svg width="54" height="54" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="19" stroke="#333" stroke-width="2.5" fill="none"/>
+              <circle cx="24" cy="24" r="19" stroke="#666" stroke-width="2" fill="none" stroke-dasharray="119" id="r-yaw" stroke-dashoffset="119" class="ring-progress" stroke-linecap="round" transform="rotate(-90 24 24)"/>
+              <text x="24" y="29" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#888" id="rv-yaw">0°</text>
+            </svg>
+            <span class="ring-lbl">yaw</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">▦ gyroscope <span>ICM-20948</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">X</span><span class="rv" id="gx">--</span></div>
+        <div class="row"><span class="rk">Y</span><span class="rv" id="gy">--</span></div>
+        <div class="row"><span class="rk">Z</span><span class="rv" id="gz">--</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">▦ power <span>INA219</span></div>
+      <div class="card-body">
+        <div class="row"><span class="rk">bus voltage</span><span class="rv" id="bvolt">--</span></div>
+        <div class="row"><span class="rk">current</span><span class="rv" id="bcurr">--</span></div>
+        <div class="row"><span class="rk">power</span><span class="rv" id="bpow">--</span></div>
+        <div class="chart-wrap"><canvas id="voltChart"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">▦ GPS <span id="gps-badge">offline</span></div>
+      <div class="card-body">
+        <div class="gps-status" id="gps-status">no module</div>
+        <div class="row"><span class="rk">latitude</span><span class="rv" id="gps-lat">--</span></div>
+        <div class="row"><span class="rk">longitude</span><span class="rv" id="gps-lon">--</span></div>
+        <div class="row"><span class="rk">satellites</span><span class="rv" id="gps-sats">--</span></div>
+        <div class="row"><span class="rk">HDOP</span><span class="rv dim" id="gps-hdop">--</span></div>
+      </div>
+    </div>
+
+    <!-- map card (leaflet) -->
+    <div class="card map-card span3">
+      <div class="card-h">🗺️ GPS location <span id="map-status">no fix</span></div>
+      <div class="map-frame-wrap">
+        <div id="gpsMap"></div>
+        <div class="map-overlay" id="map-overlay"><span>📍 waiting for GPS fix …</span></div>
+        <div class="map-coords" id="map-coords" style="display:none;"></div>
+      </div>
+    </div>
+
+    <div class="card span3">
+      <div class="card-h">◈ system health</div>
+      <div class="health-row">
+        <div class="health-item"><span class="rk">WiFi RSSI</span><span class="rv" id="rssi">--</span></div>
+        <div class="health-item"><span class="rk">CPU temp</span><span class="rv" id="cputemp">--</span></div>
+        <div class="health-item"><span class="rk">uptime</span><span class="rv" id="upt">--</span></div>
+        <div class="health-item"><span class="rk">errors / reconnects</span><span class="rv dim" id="errsline">--</span></div>
+      </div>
+    </div>
+
+    <div class="card span3">
+      <div class="card-h">⎚ console <span>live</span></div>
+      <div class="console-body" id="con"><span class="log-w">// CubeSat OS · wise warsa · monochrome</span>
+<span class="log-d">[BOOT] set ESP32 IP above, waiting for telemetry...</span>
+</div>
+    </div>
+
+  </div> <!-- end col-data -->
+
+  <!-- camera column -->
+  <div class="col-cam">
+    <div class="panel-label">◈ Pi Camera <span id="cam-status" style="color:#666;">connecting...</span></div>
+    <div class="cam-view">
+      <img id="camFeed" alt="camera feed" crossorigin="anonymous"/>
+      <div id="cam-overlay"><span id="cam-msg">connecting to camera …</span></div>
+      <div class="corner c-tl"></div><div class="corner c-tr"></div>
+      <div class="corner c-bl"></div><div class="corner c-br"></div>
+      <div id="cam-live-dot">● live</div>
+    </div>
+    <div class="cam-info">
+      <span id="cam-endpoint">—</span>
+      <span id="cam-res">—</span>
+    </div>
+    <div class="cam-controls">
+      <div class="cam-btn-row">
+        <button class="cam-btn" id="cam-photo-btn">◷ take photo</button>
+      </div>
+      <div class="cam-btn-row">
+        <button class="cam-btn" id="cam-rec-btn">◷ start recording</button>
+      </div>
+      <div class="cam-timer" id="cam-rec-timer"></div>
+      <div class="cam-capture-note" id="cam-capture-note">photos (.jpg) & videos (.webm) download directly.</div>
+    </div>
+  </div>
+
+</div> <!-- end body -->
+
+<div class="statusbar">
+  <div class="sb-item"><div class="sb-dot off" id="dot-attitude"></div>attitude</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-baro"></div>baro</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-wifi"></div>WiFi</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-power"></div>power</div>
+  <div class="sb-item"><div class="sb-dot off" id="dot-gps"></div>GPS</div>
+  <div class="sb-item">frames <span id="fc" style="color:#ddd;">0</span></div>
+  <div class="sb-item" style="color:#555;">wise warsa · B&W</div>
+</div>
+
+<script>
+  // -------- ESP32 IP config (persisted) --------
+  let ESP32_IP = localStorage.getItem('cubesat_esp32_ip') || '192.168.137.223';
+  document.getElementById('esp-ip-input').value = ESP32_IP;
+  document.getElementById('esp-ip-input').placeholder = ESP32_IP;
+  document.getElementById('esp-ip-save').onclick = () => {
+    const v = document.getElementById('esp-ip-input').value.trim();
+    if (v) { ESP32_IP = v; localStorage.setItem('cubesat_esp32_ip', ESP32_IP); document.getElementById('link-tag').textContent = 'reconnecting...'; }
+  };
+  document.getElementById('esp-ip-input').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('esp-ip-save').click(); });
+
+  // -------- clock --------
+  function tick(){ const n=new Date(); document.getElementById('clk').textContent=`UTC ${String(n.getUTCHours()).padStart(2,'0')}:${String(n.getUTCMinutes()).padStart(2,'0')}:${String(n.getUTCSeconds()).padStart(2,'0')}`; }
+  setInterval(tick,1000); tick();
+
+  // -------- calibration (persisted) --------
+  let calib = { swap:false, invRoll:false, invPitch:false, invYaw:false };
+  try { const s=localStorage.getItem('cubesat_calib'); if(s) calib=JSON.parse(s); } catch(e){}
+  function saveCalib(){ try{ localStorage.setItem('cubesat_calib', JSON.stringify(calib)); }catch(e){} }
+  function refreshCalibButtons(){
+    ['btn-swap','btn-invroll','btn-invpitch','btn-invyaw'].forEach(id => document.getElementById(id).classList.toggle('on', calib[id.replace('btn-','')]));
+  }
+  document.getElementById('btn-swap').onclick = () => { calib.swap = !calib.swap; saveCalib(); refreshCalibButtons(); };
+  document.getElementById('btn-invroll').onclick = () => { calib.invRoll = !calib.invRoll; saveCalib(); refreshCalibButtons(); };
+  document.getElementById('btn-invpitch').onclick = () => { calib.invPitch = !calib.invPitch; saveCalib(); refreshCalibButtons(); };
+  document.getElementById('btn-invyaw').onclick = () => { calib.invYaw = !calib.invYaw; saveCalib(); refreshCalibButtons(); };
+  refreshCalibButtons();
+  function applyCalib(r,p,y){ let R=r,P=p,Y=y; if(calib.swap){let t=R;R=P;P=t;} if(calib.invRoll)R=-R; if(calib.invPitch)P=-P; if(calib.invYaw)Y=-Y; return {r:R,p:P,y:Y}; }
+
+  // -------- THREE.JS scene (monochrome, inverted) --------
+  const cont = document.getElementById('canvasContainer');
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0a0a);
+  const cam = new THREE.PerspectiveCamera(36,1,0.1,200); cam.position.set(3.8,2.8,4.4); cam.lookAt(0,0.2,0);
+  const ren = new THREE.WebGLRenderer({antialias:true}); ren.setPixelRatio(Math.min(devicePixelRatio,2)); ren.shadowMap.enabled = true; ren.shadowMap.type = THREE.PCFSoftShadowMap;
+  cont.appendChild(ren.domElement);
+  function resize(){ const w=cont.clientWidth,h=cont.clientHeight; if(w&&h){ cam.aspect=w/h; cam.updateProjectionMatrix(); ren.setSize(w,h); } }
+  resize(); window.addEventListener('resize',resize);
+  scene.add(new THREE.AmbientLight(0x444444,1.6));
+  const key = new THREE.DirectionalLight(0xffffff,2.0); key.position.set(5,9,6); key.castShadow = true; key.shadow.mapSize.width=1024; key.shadow.mapSize.height=1024; scene.add(key);
+  scene.add(new THREE.DirectionalLight(0xffffff,0.5).position.set(-4,2,-5));
+  scene.add(new THREE.DirectionalLight(0xffffff,0.3).position.set(0,-3,4));
+  const grid = new THREE.GridHelper(16,32,0x333333,0x222222); grid.position.y = -1.85; scene.add(grid);
+
+  const sat = new THREE.Group(); scene.add(sat);
+  const matBody = new THREE.MeshStandardMaterial({color:0xbbbbbb, roughness:0.25, metalness:0.6});
+  const matRail = new THREE.MeshStandardMaterial({color:0x888888, roughness:
